@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: 'Helvetica', 'Arial', sans-serif; color: #333; padding: 40px; }
+        .header { text-align: center; border-bottom: 3px solid #764ba2; padding-bottom: 10px; margin-bottom: 30px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #dee2e6; padding: 12px; text-align: left; }
+        th { background-color: #f8f9fa; color: #764ba2; font-weight: bold; }
+        
+        /* CSS Classes to replace the inline logic errors */
+        .at-risk { color: #dc3545; font-weight: bold; }
+        .safe { color: #198754; }
+        
+        .summary-box { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Cumulative Attendance Summary</h1>
+        <h3>Subject: {{ subject if subject != 'ALL' else 'All Assigned Subjects' }}</h3>
+    </div>
+
+    <div class="summary-box">
+        <p><strong>Date Range:</strong> {{ start }} to {{ end }}</p>
+        <p><strong>Requirement:</strong> Students below 75% are highlighted as At-Risk.</p>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Student Name</th>
+                <th>Labs Attended</th>
+                <th>Total Sessions</th>
+                <th>Attendance %</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in data %}
+            <tr>
+                <td>{{ s.name }}</td>
+                <td>{{ s.count }}</td>
+                <td>{{ s.total }}</td>
+                <td class="{{ 'at-risk' if s.perc < 75 else 'safe' }}">
+                    {{ s.perc }}%
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div style="margin-top: 100px;">
+        <div style="float: right; border-top: 1px solid #000; width: 200px; text-align: center;">
+            <p>HOD / Faculty Signature</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -7,6 +7,11 @@ from sqlalchemy import func
 from . import login_manager, db, socketio 
 from .models import AttendanceRecord, User, AttendanceSession,TeacherSubject
 from flask import current_app as app
+import pdfkit
+from flask import make_response
+
+path_wkhtmltopdf = r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'
+config = pdfkit.configuration(wkhtmltopdf=path_wkhtmltopdf)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -478,6 +483,140 @@ def extend_session():
         db.session.commit()
         flash("Session extended by 10 minutes!", "success")
     return redirect(url_for('teacher_dashboard'))
+
+@app.route('/export_pdf/<int:session_id>')
+@login_required
+def export_pdf(session_id):
+    if current_user.role != 'teacher':
+        return "Unauthorized", 403
+
+    # 1. Fetch Session and Attendance Data
+    session = AttendanceSession.query.get_or_404(session_id)
+    results = db.session.query(
+        User.username,
+        AttendanceRecord.timestamp
+    ).filter(User.role == 'student')\
+     .outerjoin(AttendanceRecord, (User.id == AttendanceRecord.student_id) & (AttendanceRecord.session_id == session_id))\
+     .all()
+
+    # 2. Render HTML Template
+    html = render_template('pdf_single_report.html', 
+                           session=session, 
+                           results=results, 
+                           faculty=current_user.username)
+    
+    # 3. Generate PDF with Config
+    try:
+        pdf = pdfkit.from_string(html, False, configuration=config)
+        response = make_response(pdf)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename=Session_{session.subject}_{session_id}.pdf'
+        return response
+    except OSError as e:
+        flash("PDF Engine not found. Please ensure wkhtmltopdf is installed.", "danger")
+        return redirect(url_for('teacher_dashboard'))
+
+# ROUTE 2: Overall/Cumulative PDF (Date Range Export)
+@app.route('/export_overall_pdf', methods=['POST'])
+@login_required
+def export_overall_pdf():
+    if current_user.role != 'teacher': 
+        return "Unauthorized", 403
+
+    subject = request.form.get('subject')
+    start_date_str = request.form.get('start_date')
+    end_date_str = request.form.get('end_date')
+
+    # Convert strings to datetime objects
+    start_dt = datetime.strptime(start_date_str, '%Y-%m-%d')
+    end_dt = datetime.strptime(end_date_str, '%Y-%m-%d') + timedelta(days=1, seconds=-1)
+
+    # 1. Get total sessions conducted
+    total_sess_query = AttendanceSession.query.filter(
+        AttendanceSession.teacher_id == current_user.id,
+        AttendanceSession.start_time.between(start_dt, end_dt)
+    )
+    if subject != 'ALL':
+        total_sess_query = total_sess_query.filter_by(subject=subject)
+    
+    total_lectures = total_sess_query.count()
+
+    if total_lectures == 0:
+        flash("No sessions found to generate PDF.", "warning")
+        return redirect(url_for('teacher_dashboard'))
+
+    # 2. Query Student Cumulative Data
+    attendance_subquery = db.session.query(
+        AttendanceRecord.student_id,
+        func.count(AttendanceRecord.id).label('present_count')
+    ).join(AttendanceSession).filter(
+        AttendanceSession.teacher_id == current_user.id,
+        AttendanceSession.start_time.between(start_dt, end_dt)
+    )
+    if subject != 'ALL':
+        attendance_subquery = attendance_subquery.filter(AttendanceSession.subject == subject)
+    
+    attendance_subquery = attendance_subquery.group_by(AttendanceRecord.student_id).subquery()
+
+    results = db.session.query(
+        User.username,
+        func.coalesce(attendance_subquery.c.present_count, 0)
+    ).filter(User.role == 'student')\
+     .outerjoin(attendance_subquery, User.id == attendance_subquery.c.student_id).all()
+
+    # 3. Format data for the PDF Template
+    report_list = []
+    for username, count in results:
+        percentage = round((count / total_lectures) * 100, 2)
+        report_list.append({
+            "name": username,
+            "count": count,
+            "total": total_lectures,
+            "perc": percentage
+        })
+
+    # 4. Render HTML and Convert
+    html = render_template('pdf_cumulative_report.html', 
+                           data=report_list, 
+                           subject=subject, 
+                           start=start_date_str, 
+                           end=end_date_str,
+                           faculty=current_user.username)
+    
+    try:
+        pdf = pdfkit.from_string(html, False, configuration=config)
+        response = make_response(pdf)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename=Overall_Report_{subject}.pdf'
+        return response
+    except OSError:
+        flash("PDF Engine error. Check wkhtmltopdf installation.", "danger")
+        return redirect(url_for('teacher_dashboard'))
+
+@app.route('/delete_sessions', methods=['POST'])
+@login_required
+def delete_sessions():
+    if current_user.role != 'teacher':
+        return jsonify({"success": False, "message": "Unauthorized"}), 403
+
+    data = request.get_json()
+    session_ids = data.get('session_ids', [])
+
+    try:
+        # Delete related attendance records first
+        AttendanceRecord.query.filter(AttendanceRecord.session_id.in_(session_ids)).delete(synchronize_session=False)
+        
+        # Delete the sessions
+        AttendanceSession.query.filter(
+            AttendanceSession.id.in_(session_ids),
+            AttendanceSession.teacher_id == current_user.id
+        ).delete(synchronize_session=False)
+        
+        db.session.commit()
+        return jsonify({"success": True, "message": f"Deleted {len(session_ids)} sessions."})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
 
 @app.route('/logout')
 def logout():
