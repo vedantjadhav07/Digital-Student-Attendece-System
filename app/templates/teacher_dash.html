@@ -20,6 +20,7 @@
             height: 100vh;
             position: fixed;
             padding: 0 !important;
+            width: inherit; /* Inherit width from col-md-3 */
         }
 
         .sidebar-content {
@@ -94,23 +95,27 @@
             transform: translateY(-3px);
         }
 
+        .pc-box i {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+        }
+
         .pc-box span {
             font-size: 0.7rem;
             font-weight: normal;
-            margin-top: 5px;
+            margin-top: 2px;
         }
 
         .tab-content {
             padding-top: 20px;
         }
 
-        /* Offset main content because sidebar is fixed */
         main {
-            margin-left: 16.666667%;
+            /* Adjusting for fixed sidebar */
+            padding-left: 20px;
         }
 
         @media (max-width: 768px) {
-            main { margin-left: 0; }
             .sidebar { position: relative; height: auto; }
         }
     </style>
@@ -163,11 +168,11 @@
                 </div>
             </nav>
 
-            <main class="col-md-9 col-lg-10 p-4">
+            <main class="col-md-9 offset-md-3 col-lg-10 offset-lg-2 p-4">
                 {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                 {% for cat, msg in messages %}
-                <div class="alert alert-{{cat}} alert-dismissible fade show">{{msg}}<button type="button"
+                <div class="alert alert-{{cat}} alert-dismissible fade show shadow-sm border-0">{{msg}}<button type="button"
                         class="btn-close" data-bs-dismiss="alert"></button></div>
                 {% endfor %}
                 {% endif %}
@@ -185,15 +190,13 @@
                                 {% if active_session %}
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
-                                        <h5 class="mb-1 text-success"><i class="bi bi-broadcast me-2"></i>Live: {{
-                                            active_session.subject }}</h5>
-                                        <p class="text-muted mb-0">Room: <strong>{{ active_session.lab_name }}</strong>
+                                        <h5 class="mb-1 text-success"><i class="bi bi-broadcast me-2"></i>Live: {{ active_session.subject }}</h5>
+                                        <p class="text-muted mb-0">Room: <strong>{{ active_session.lab_name }}</strong> | Range: <strong>PC-{{ active_session.start_pc }} to PC-{{ active_session.start_pc + 29 }}</strong>
                                         </p>
                                     </div>
                                     <div class="d-flex gap-2">
                                         <form action="{{ url_for('extend_session') }}" method="POST">
-                                            <button type="submit" class="btn btn-warning shadow-sm"><i
-                                                    class="bi bi-plus-circle me-1"></i> +10 Min</button>
+                                            <button type="submit" class="btn btn-warning shadow-sm"><i class="bi bi-plus-circle me-1"></i> +10 Min</button>
                                         </form>
                                         <form action="{{ url_for('stop_lab') }}" method="POST">
                                             <button type="submit" class="btn btn-danger shadow-sm">Stop Session</button>
@@ -209,8 +212,7 @@
                                                 <select name="subject" class="form-select" required>
                                                     <option value="">Select Subject</option>
                                                     {% for sub in my_stored_subjects %}
-                                                    <option value="{{ sub.subject_name }}">{{ sub.subject_name }}
-                                                    </option>
+                                                    <option value="{{ sub.subject_name }}">{{ sub.subject_name }}</option>
                                                     {% endfor %}
                                                 </select>
                                             </div>
@@ -222,8 +224,7 @@
                                                 </select>
                                             </div>
                                             <div class="col-12 mt-3">
-                                                <button type="submit" class="btn btn-primary w-100">Start
-                                                    Attendance</button>
+                                                <button type="submit" class="btn btn-primary w-100">Start Attendance</button>
                                             </div>
                                         </form>
                                     </div>
@@ -231,8 +232,7 @@
                                         <h5 class="card-title text-secondary mb-3">Add Subject</h5>
                                         <form action="{{ url_for('add_subject') }}" method="POST">
                                             <div class="input-group">
-                                                <input type="text" name="subject_name" class="form-control"
-                                                    placeholder="e.g., OSY" required>
+                                                <input type="text" name="subject_name" class="form-control" placeholder="e.g., OSY" required>
                                                 <button class="btn btn-outline-primary" type="submit">Add</button>
                                             </div>
                                         </form>
@@ -243,8 +243,12 @@
                         </div>
 
                         <div class="grid-container">
-                            {% for i in range(1, (pc_count|default(30)) + 1) %}
+                            {% set start = active_session.start_pc if active_session else 1 %}
+                            {% set count = 30 %}
+                            
+                            {% for i in range(start, start + count) %}
                             <div class="pc-box {{ 'active' if i|string in marked_pcs }}" id="pc-{{ i }}">
+                                <i class="bi bi-display"></i>
                                 PC-{{ i }}
                                 <span>{{ marked_pcs[i|string] if i|string in marked_pcs else 'Available' }}</span>
                             </div>
@@ -255,8 +259,7 @@
                     <div class="tab-pane fade" id="history-pane">
                         <div class="d-flex justify-content-between align-items-center mb-4">
                             <h3 class="fw-bold mb-0">Session History</h3>
-                            <button id="deleteSelectedBtn" class="btn btn-danger shadow-sm d-none"
-                                onclick="deleteSelectedSessions()">
+                            <button id="deleteSelectedBtn" class="btn btn-danger shadow-sm d-none" onclick="deleteSelectedSessions()">
                                 <i class="bi bi-trash3 me-2"></i>Delete Selected
                             </button>
                         </div>
@@ -266,10 +269,7 @@
                                 <table class="table table-hover align-middle mb-0" id="historyTable">
                                     <thead class="table-light">
                                         <tr>
-                                            <th style="width: 40px;">
-                                                <input type="checkbox" class="form-check-input" id="selectAll"
-                                                    onclick="toggleAllSessions(this)">
-                                            </th>
+                                            <th style="width: 40px;"><input type="checkbox" class="form-check-input" id="selectAll" onclick="toggleAllSessions(this)"></th>
                                             <th>Date & Time</th>
                                             <th>Subject</th>
                                             <th>Room</th>
@@ -280,28 +280,16 @@
                                     <tbody>
                                         {% for sess in past_sessions %}
                                         <tr id="row-{{ sess.id }}">
-                                            <td>
-                                                <input type="checkbox" class="form-check-input session-checkbox"
-                                                    value="{{ sess.id }}" onchange="updateDeleteButton()">
-                                            </td>
+                                            <td><input type="checkbox" class="form-check-input session-checkbox" value="{{ sess.id }}" onchange="updateDeleteButton()"></td>
                                             <td>{{ sess.start_time.strftime('%d %b %Y, %H:%M') }}</td>
                                             <td><span class="badge bg-info text-dark">{{ sess.subject }}</span></td>
                                             <td>{{ sess.lab_name }}</td>
                                             <td><strong>{{ sess.count }}</strong> Students</td>
                                             <td>
                                                 <div class="btn-group shadow-sm">
-                                                    <a href="{{ url_for('export_attendance', session_id=sess.id) }}"
-                                                        class="btn btn-sm btn-success">
-                                                        <i class="bi bi-file-earmark-excel"></i>
-                                                    </a>
-                                                    <a href="{{ url_for('export_pdf', session_id=sess.id) }}"
-                                                        class="btn btn-sm btn-danger">
-                                                        <i class="bi bi-file-earmark-pdf"></i>
-                                                    </a>
-                                                    <button class="btn btn-sm btn-outline-danger"
-                                                        onclick="deleteIndividualSession('{{ sess.id }}')">
-                                                        <i class="bi bi-trash"></i>
-                                                    </button>
+                                                    <a href="{{ url_for('export_attendance', session_id=sess.id) }}" class="btn btn-sm btn-success"><i class="bi bi-file-earmark-excel"></i></a>
+                                                    <a href="{{ url_for('export_pdf', session_id=sess.id) }}" class="btn btn-sm btn-danger"><i class="bi bi-file-earmark-pdf"></i></a>
+                                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteIndividualSession('{{ sess.id }}')"><i class="bi bi-trash"></i></button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -334,24 +322,15 @@
                                         <td>
                                             <div class="d-flex align-items-center">
                                                 <span class="me-2" style="width: 45px;">{{ s.percentage or 0 }}%</span>
-                                                <div class="progress flex-grow-1"
-                                                    style="height: 8px; background-color: #e9ecef;">
-                                                    <div class="progress-bar attendance-bar {{ 'bg-danger' if s.status == 'At-Risk' else 'bg-success' }}"
-                                                        role="progressbar" data-width="{{ s.percentage|default(0) }}"
-                                                        style="width: 0%;"></div>
+                                                <div class="progress flex-grow-1" style="height: 8px; background-color: #e9ecef;">
+                                                    <div class="progress-bar attendance-bar {{ 'bg-danger' if s.status == 'At-Risk' else 'bg-success' }}" 
+                                                         role="progressbar" data-width="{{ s.percentage|default(0) }}" style="width: 0%;"></div>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td>
-                                            <span class="badge {{ 'bg-danger' if s.status == 'At-Risk' else 'bg-success' }}">
-                                                {{ s.status }}
-                                            </span>
-                                        </td>
+                                        <td><span class="badge {{ 'bg-danger' if s.status == 'At-Risk' else 'bg-success' }}">{{ s.status }}</span></td>
                                         <td class="text-end">
-                                            <button class="btn btn-sm btn-outline-primary"
-                                                onclick="document.getElementById('studentSearchInput').value='{{ s.name }}'; searchStudent();">
-                                                <i class="bi bi-search"></i>
-                                            </button>
+                                            <button class="btn btn-sm btn-outline-primary" onclick="document.getElementById('studentSearchInput').value='{{ s.name }}'; searchStudent();"><i class="bi bi-search"></i></button>
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -374,16 +353,11 @@
                                             {% endfor %}
                                         </select>
                                     </div>
-                                    <div class="col-md-4"><label class="form-label fw-bold">From Date</label><input
-                                            type="date" name="start_date" class="form-control" required></div>
-                                    <div class="col-md-4"><label class="form-label fw-bold">To Date</label><input
-                                            type="date" name="end_date" class="form-control" required></div>
+                                    <div class="col-md-4"><label class="form-label fw-bold">From Date</label><input type="date" name="start_date" class="form-control" required></div>
+                                    <div class="col-md-4"><label class="form-label fw-bold">To Date</label><input type="date" name="end_date" class="form-control" required></div>
                                     <div class="col-12 mt-5 text-center">
-                                        <button type="submit" class="btn btn-success px-5 me-2"><i
-                                                class="bi bi-file-earmark-excel me-2"></i>Export Excel</button>
-                                        <button type="submit" formaction="{{ url_for('export_overall_pdf') }}"
-                                            class="btn btn-danger px-5"><i
-                                                class="bi bi-file-earmark-pdf me-2"></i>Export PDF</button>
+                                        <button type="submit" class="btn btn-success px-5 me-2"><i class="bi bi-file-earmark-excel me-2"></i>Export Excel</button>
+                                        <button type="submit" formaction="{{ url_for('export_overall_pdf') }}" class="btn btn-danger px-5"><i class="bi bi-file-earmark-pdf me-2"></i>Export PDF</button>
                                     </div>
                                 </div>
                             </form>
@@ -419,15 +393,10 @@
         }
 
         document.addEventListener("DOMContentLoaded", function () {
-            // Handle URL tab redirect
             const urlParams = new URLSearchParams(window.location.search);
-            const activeTab = urlParams.get('tab');
-            if (activeTab === 'history') {
+            if (urlParams.get('tab') === 'history') {
                 const historyBtn = document.getElementById('history-tab');
-                if (historyBtn) {
-                    const tabTrigger = new bootstrap.Tab(historyBtn);
-                    tabTrigger.show();
-                }
+                if (historyBtn) new bootstrap.Tab(historyBtn).show();
             }
 
             const bars = document.querySelectorAll('.attendance-bar');
@@ -442,10 +411,8 @@
             try {
                 const response = await fetch(`/api/student_stats/${name}`);
                 const data = await response.json();
-                if (data.error) { alert(data.error); }
-                else {
-                    alert("Total Presence: " + data.total_presence);
-                }
+                if (data.error) alert(data.error);
+                else alert("Total Presence: " + data.total_presence);
             } catch (err) { console.error(err); }
         }
 
@@ -461,22 +428,16 @@
             if (selected > 0) {
                 btn.classList.remove('d-none');
                 btn.innerHTML = `<i class="bi bi-trash3 me-2"></i>Delete Selected (${selected})`;
-            } else {
-                btn.classList.add('d-none');
-            }
+            } else btn.classList.add('d-none');
         }
 
         async function deleteIndividualSession(id) {
-            if (confirm("Are you sure? All attendance records for this session will be lost.")) {
-                await processDeletion([id]);
-            }
+            if (confirm("Are you sure? All attendance records for this session will be lost.")) await processDeletion([id]);
         }
 
         async function deleteSelectedSessions() {
             const selected = Array.from(document.querySelectorAll('.session-checkbox:checked')).map(cb => cb.value);
-            if (confirm(`Delete ${selected.length} selected sessions? This cannot be undone.`)) {
-                await processDeletion(selected);
-            }
+            if (confirm(`Delete ${selected.length} selected sessions?`)) await processDeletion(selected);
         }
 
         async function processDeletion(ids) {
@@ -487,14 +448,9 @@
                     body: JSON.stringify({ session_ids: ids })
                 });
                 const data = await response.json();
-                if (data.success) {
-                    window.location.href = window.location.pathname + "?tab=history";
-                } else {
-                    alert("Error: " + data.message);
-                }
-            } catch (err) {
-                alert("Network error occurred.");
-            }
+                if (data.success) window.location.href = window.location.pathname + "?tab=history";
+                else alert("Error: " + data.message);
+            } catch (err) { alert("Network error occurred."); }
         }
     </script>
 </body>

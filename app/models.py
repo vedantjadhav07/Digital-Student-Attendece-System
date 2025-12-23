@@ -20,6 +20,7 @@ class AttendanceSession(db.Model):
     lab_id = db.Column(db.Integer, db.ForeignKey('lab_room.id'))
     lab_name = db.Column(db.String(50))
     lab_capacity = db.Column(db.Integer, default=30)
+    start_pc = db.Column(db.Integer, default=1)
     is_active = db.Column(db.Boolean, default=False)
     start_time = db.Column(db.DateTime, default=datetime.utcnow)
     end_time = db.Column(db.DateTime)    # When the 10-min timer ends

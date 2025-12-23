@@ -11,7 +11,7 @@ __pycache__/
 *$py.class
 
 # Database
-create_data.py
+
 instance/
 *.db
 *.sqlite3

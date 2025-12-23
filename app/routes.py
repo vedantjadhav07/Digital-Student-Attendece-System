@@ -290,34 +290,46 @@ def advanced_export():
     output.seek(0)
     return send_file(output, download_name=f"Report_{subject}.xlsx", as_attachment=True)
 
+
+
 @app.route('/start_lab', methods=['POST'])
 @login_required
 def start_lab():
-    if current_user.role != 'teacher': return "Unauthorized", 403
+    if current_user.role != 'teacher': 
+        return "Unauthorized", 403
     
-    # Close any existing sessions
+    # Close any existing sessions for this teacher
     AttendanceSession.query.filter_by(teacher_id=current_user.id, is_active=True).update({"is_active": False})
     
-    # Get capacity based on Lab Room selection
     lab_room = request.form.get('lab_room')
-    capacity = 30 # Default
-    if lab_room == "Lab 2": capacity = 60
-    elif lab_room == "Lab 3": capacity = 90
+    subject = request.form.get('subject')
+    
+    # Logic: Every lab has 30 PCs, but different IP/ID ranges
+    capacity = 30 
+    if lab_room == "Lab 1":
+        start_pc = 1     # Range: 1-30
+    elif lab_room == "Lab 2":
+        start_pc = 31    # Range: 31-60
+    elif lab_room == "Lab 3":
+        start_pc = 61    # Range: 61-90
+    else:
+        start_pc = 1
 
     new_sess = AttendanceSession(
-        subject=request.form.get('subject'),
+        subject=subject,
         lab_name=lab_room,
-        lab_capacity=capacity, # Saving the capacity
+        lab_capacity=capacity, 
+        start_pc=start_pc, # Ensure this field exists in your AttendanceSession model
         is_active=True,
         start_time=datetime.utcnow(),
         end_time=datetime.utcnow() + timedelta(minutes=10),
         teacher_id=current_user.id
     )
+    
     db.session.add(new_sess)
     db.session.commit()
-    flash(f"Portal opened for {new_sess.subject} in {lab_room}", "success")
+    flash(f"Portal opened for {subject} in {lab_room} (Range: PC {start_pc}-{start_pc+29})", "success")
     return redirect(url_for('teacher_dashboard'))
-
 
 @app.route('/submit_attendance', methods=['POST'])
 @login_required
@@ -326,7 +338,26 @@ def submit_attendance():
     if not session:
         return jsonify({"success": False, "message": "No active session."})
 
-    # 1. Check if THIS STUDENT already marked attendance (Existing check)
+    # Get student PC number from IP
+    user_ip = request.remote_addr
+    try:
+        # Extract last part of IP (e.g., .45)
+        pc_num = int(user_ip.split('.')[-1]) if user_ip != '127.0.0.1' else current_user.id
+    except (ValueError, IndexError):
+        pc_num = 0
+
+    # --- NEW SECURITY RANGE CHECK ---
+    start = session.start_pc
+    end = start + session.lab_capacity - 1
+
+    if not (start <= pc_num <= end):
+        return jsonify({
+            "success": False, 
+            "message": f"Wrong Lab! You are at PC-{pc_num}, but this session is for PCs {start} to {end}."
+        })
+    # --------------------------------
+
+    # 1. Check if student already marked
     already_marked = AttendanceRecord.query.filter_by(
         student_id=current_user.id, 
         session_id=session.id
@@ -334,8 +365,7 @@ def submit_attendance():
     if already_marked:
         return jsonify({"success": False, "message": "You have already marked your attendance!"})
 
-    # 2. NEW RESTRICTION: Check if THIS PC (IP) has already been used in this session
-    user_ip = request.remote_addr
+    # 2. Check if PC already used in this session
     ip_already_used = AttendanceRecord.query.filter_by(
         session_id=session.id, 
         ip_address=user_ip
@@ -344,16 +374,15 @@ def submit_attendance():
     if ip_already_used:
         return jsonify({
             "success": False, 
-            "message": "This PC has already been used to mark attendance. Please use your assigned PC."
+            "message": "This PC has already been used. Please use your assigned PC."
         })
 
-    # 3. If both checks pass, save the record
-    pc_num = user_ip.split('.')[-1] if user_ip != '127.0.0.1' else current_user.id
-
+    # 3. Save the record
     record = AttendanceRecord(student_id=current_user.id, session_id=session.id, ip_address=user_ip)
     db.session.add(record)
     db.session.commit()
 
+    # Emit to teacher dash
     socketio.emit('attendance_update', {
         'pc_number': str(pc_num), 
         'student_name': current_user.username
