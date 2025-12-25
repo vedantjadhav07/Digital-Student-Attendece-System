@@ -1,5 +1,5 @@
 import io
-import pandas as pd  # This is the only 'pd' you need
+import pandas as pd 
 from datetime import datetime, timedelta
 from flask import jsonify, render_template, request, redirect, url_for, flash, send_file
 from flask_login import login_user, logout_user, login_required, current_user
@@ -319,7 +319,7 @@ def start_lab():
         subject=subject,
         lab_name=lab_room,
         lab_capacity=capacity, 
-        start_pc=start_pc, # Ensure this field exists in your AttendanceSession model
+        start_pc=start_pc, 
         is_active=True,
         start_time=datetime.utcnow(),
         end_time=datetime.utcnow() + timedelta(minutes=10),
@@ -545,7 +545,7 @@ def export_pdf(session_id):
         flash("PDF Engine not found. Please ensure wkhtmltopdf is installed.", "danger")
         return redirect(url_for('teacher_dashboard'))
 
-# ROUTE 2: Overall/Cumulative PDF (Date Range Export)
+
 @app.route('/export_overall_pdf', methods=['POST'])
 @login_required
 def export_overall_pdf():

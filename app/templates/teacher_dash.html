@@ -312,7 +312,7 @@
                                         <th>Student Name</th>
                                         <th>Attendance Progress</th>
                                         <th>Status</th>
-                                        <th class="text-end">Action</th>
+                                        
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -329,9 +329,7 @@
                                             </div>
                                         </td>
                                         <td><span class="badge {{ 'bg-danger' if s.status == 'At-Risk' else 'bg-success' }}">{{ s.status }}</span></td>
-                                        <td class="text-end">
-                                            <button class="btn btn-sm btn-outline-primary" onclick="document.getElementById('studentSearchInput').value='{{ s.name }}'; searchStudent();"><i class="bi bi-search"></i></button>
-                                        </td>
+                                        
                                     </tr>
                                     {% endfor %}
                                 </tbody>
