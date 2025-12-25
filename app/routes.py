@@ -51,6 +51,8 @@ def teacher_dashboard():
         teacher_id=current_user.id
     ).first()
 
+    all_students_list = User.query.filter_by(role='student').all()
+
     marked_pcs = {}
     remaining_seconds = 0
     # FEATURE 4: Dynamic Grid Size (Defaults to 30 if no active session)
@@ -115,7 +117,8 @@ def teacher_dashboard():
                            remaining_seconds=remaining_seconds,
                            past_sessions=past_sessions,
                            student_analysis=student_analysis,
-                           pc_count=pc_count)
+                           pc_count=pc_count,
+                           all_students_list=all_students_list)
 
 
 @app.route('/add_subject', methods=['POST'])
@@ -646,6 +649,49 @@ def delete_sessions():
     except Exception as e:
         db.session.rollback()
         return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route('/manage_students', methods=['POST'])
+@login_required
+def manage_students():
+    if current_user.role != 'teacher':
+        return jsonify({"success": False, "message": "Unauthorized"}), 403
+        
+    username = request.form.get('username')
+    password = request.form.get('password')
+    
+    if not username or not password:
+        flash("Username and password are required.", "danger")
+        return redirect(url_for('teacher_dashboard', tab='students'))
+
+    # Check if user already exists
+    if User.query.filter_by(username=username).first():
+        flash("Username already exists.", "warning")
+    else:
+        new_student = User(username=username, password=password, role='student')
+        db.session.add(new_student)
+        db.session.commit()
+        flash(f"Student '{username}' added successfully!", "success")
+        
+    return redirect(url_for('teacher_dashboard', tab='students'))
+
+
+@app.route('/delete_student/<int:student_id>', methods=['POST'])
+@login_required
+def delete_student(student_id):
+    if current_user.role != 'teacher':
+        return jsonify({"success": False, "message": "Unauthorized"}), 403
+        
+    student = User.query.get_or_404(student_id)
+    if student.role == 'student':
+        # Optional: Delete their attendance records first to avoid foreign key errors
+        AttendanceRecord.query.filter_by(student_id=student_id).delete()
+        db.session.delete(student)
+        db.session.commit()
+        flash("Student account deleted.", "info")
+    
+    return redirect(url_for('teacher_dashboard', tab='students'))
+
 
 @app.route('/logout')
 def logout():
