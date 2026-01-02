@@ -59,7 +59,7 @@ def teacher_dashboard():
     pc_count = active_session.lab_capacity if active_session else 30
 
     if active_session:
-        now = datetime.utcnow()
+        now = datetime.now()
         if now < active_session.end_time:
             remaining_seconds = int((active_session.end_time - now).total_seconds())
             records = db.session.query(AttendanceRecord, User).join(User).filter(
@@ -324,8 +324,8 @@ def start_lab():
         lab_capacity=capacity, 
         start_pc=start_pc, 
         is_active=True,
-        start_time=datetime.utcnow(),
-        end_time=datetime.utcnow() + timedelta(minutes=10),
+        start_time=datetime.now(),
+        end_time=datetime.now() + timedelta(minutes=10),
         teacher_id=current_user.id
     )
     

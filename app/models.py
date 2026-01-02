@@ -22,7 +22,7 @@ class AttendanceSession(db.Model):
     lab_capacity = db.Column(db.Integer, default=30)
     start_pc = db.Column(db.Integer, default=1)
     is_active = db.Column(db.Boolean, default=False)
-    start_time = db.Column(db.DateTime, default=datetime.utcnow)
+    start_time = db.Column(db.DateTime, default=datetime.now)
     end_time = db.Column(db.DateTime)    # When the 10-min timer ends
     teacher_id = db.Column(db.Integer, db.ForeignKey('user.id'))
 
@@ -31,7 +31,7 @@ class AttendanceRecord(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     session_id = db.Column(db.Integer, db.ForeignKey('attendance_session.id'))
     ip_address = db.Column(db.String(50))
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=datetime.now)
 
 class TeacherSubject(db.Model):
     id = db.Column(db.Integer, primary_key=True)

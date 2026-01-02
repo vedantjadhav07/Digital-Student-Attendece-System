@@ -20,7 +20,8 @@
             height: 100vh;
             position: fixed;
             padding: 0 !important;
-            width: inherit; /* Inherit width from col-md-3 */
+            width: inherit;
+            /* Inherit width from col-md-3 */
         }
 
         .sidebar-content {
@@ -116,7 +117,19 @@
         }
 
         @media (max-width: 768px) {
-            .sidebar { position: relative; height: auto; }
+            .sidebar {
+                position: relative;
+                height: auto;
+            }
+        }
+
+        #historyTable tbody tr {
+            transition: background-color 0.2s ease;
+        }
+
+        #historyTable tbody tr:hover {
+            background-color: rgba(102, 126, 234, 0.05);
+            /* Very light purple tint on hover */
         }
     </style>
 </head>
@@ -132,25 +145,29 @@
                         <h6 class="mb-0">{{ current_user.username }}</h6>
                         <small class="text-muted">Faculty Member</small>
                     </div>
-                    
+
                     <ul class="nav flex-column sidebar-nav" id="teacherTabs" role="tablist">
                         <li class="nav-item">
-                            <button class="nav-link active" id="lab-tab" data-bs-toggle="tab" data-bs-target="#lab-pane">
+                            <button class="nav-link active" id="lab-tab" data-bs-toggle="tab"
+                                data-bs-target="#lab-pane">
                                 <i class="bi bi-display me-2"></i> Lab Attendance
                             </button>
                         </li>
                         <li class="nav-item">
-                            <button class="nav-link" id="students-tab" data-bs-toggle="tab" data-bs-target="#students-pane">
+                            <button class="nav-link" id="students-tab" data-bs-toggle="tab"
+                                data-bs-target="#students-pane">
                                 <i class="bi bi-people-fill me-2"></i> Manage Students
                             </button>
                         </li>
                         <li class="nav-item">
-                            <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history-pane">
+                            <button class="nav-link" id="history-tab" data-bs-toggle="tab"
+                                data-bs-target="#history-pane">
                                 <i class="bi bi-clock-history me-2"></i> Session History
                             </button>
                         </li>
                         <li class="nav-item">
-                            <button class="nav-link" id="records-tab" data-bs-toggle="tab" data-bs-target="#records-pane">
+                            <button class="nav-link" id="records-tab" data-bs-toggle="tab"
+                                data-bs-target="#records-pane">
                                 <i class="bi bi-graph-up me-2"></i> Student Analysis
                             </button>
                         </li>
@@ -177,8 +194,8 @@
                 {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                 {% for cat, msg in messages %}
-                <div class="alert alert-{{cat}} alert-dismissible fade show shadow-sm border-0">{{msg}}<button type="button"
-                        class="btn-close" data-bs-dismiss="alert"></button></div>
+                <div class="alert alert-{{cat}} alert-dismissible fade show shadow-sm border-0">{{msg}}<button
+                        type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
                 {% endfor %}
                 {% endif %}
                 {% endwith %}
@@ -195,13 +212,17 @@
                                 {% if active_session %}
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
-                                        <h5 class="mb-1 text-success"><i class="bi bi-broadcast me-2"></i>Live: {{ active_session.subject }}</h5>
-                                        <p class="text-muted mb-0">Room: <strong>{{ active_session.lab_name }}</strong> | Range: <strong>PC-{{ active_session.start_pc }} to PC-{{ active_session.start_pc + 29 }}</strong>
+                                        <h5 class="mb-1 text-success"><i class="bi bi-broadcast me-2"></i>Live: {{
+                                            active_session.subject }}</h5>
+                                        <p class="text-muted mb-0">Room: <strong>{{ active_session.lab_name }}</strong>
+                                            | Range: <strong>PC-{{ active_session.start_pc }} to PC-{{
+                                                active_session.start_pc + 29 }}</strong>
                                         </p>
                                     </div>
                                     <div class="d-flex gap-2">
                                         <form action="{{ url_for('extend_session') }}" method="POST">
-                                            <button type="submit" class="btn btn-warning shadow-sm"><i class="bi bi-plus-circle me-1"></i> +10 Min</button>
+                                            <button type="submit" class="btn btn-warning shadow-sm"><i
+                                                    class="bi bi-plus-circle me-1"></i> +10 Min</button>
                                         </form>
                                         <form action="{{ url_for('stop_lab') }}" method="POST">
                                             <button type="submit" class="btn btn-danger shadow-sm">Stop Session</button>
@@ -217,7 +238,8 @@
                                                 <select name="subject" class="form-select" required>
                                                     <option value="">Select Subject</option>
                                                     {% for sub in my_stored_subjects %}
-                                                    <option value="{{ sub.subject_name }}">{{ sub.subject_name }}</option>
+                                                    <option value="{{ sub.subject_name }}">{{ sub.subject_name }}
+                                                    </option>
                                                     {% endfor %}
                                                 </select>
                                             </div>
@@ -229,7 +251,8 @@
                                                 </select>
                                             </div>
                                             <div class="col-12 mt-3">
-                                                <button type="submit" class="btn btn-primary w-100">Start Attendance</button>
+                                                <button type="submit" class="btn btn-primary w-100">Start
+                                                    Attendance</button>
                                             </div>
                                         </form>
                                     </div>
@@ -237,7 +260,8 @@
                                         <h5 class="card-title text-secondary mb-3">Add Subject</h5>
                                         <form action="{{ url_for('add_subject') }}" method="POST">
                                             <div class="input-group">
-                                                <input type="text" name="subject_name" class="form-control" placeholder="e.g., OSY" required>
+                                                <input type="text" name="subject_name" class="form-control"
+                                                    placeholder="e.g., OSY" required>
                                                 <button class="btn btn-outline-primary" type="submit">Add</button>
                                             </div>
                                         </form>
@@ -250,7 +274,7 @@
                         <div class="grid-container">
                             {% set start = active_session.start_pc if active_session else 1 %}
                             {% set count = 30 %}
-                            
+
                             {% for i in range(start, start + count) %}
                             <div class="pc-box {{ 'active' if i|string in marked_pcs }}" id="pc-{{ i }}">
                                 <i class="bi bi-display"></i>
@@ -272,11 +296,13 @@
                                     <form action="/manage_students" method="POST">
                                         <div class="mb-3">
                                             <label class="form-label small fw-bold">Username / ID</label>
-                                            <input type="text" name="username" class="form-control" placeholder="Enter student username" required>
+                                            <input type="text" name="username" class="form-control"
+                                                placeholder="Enter student username" required>
                                         </div>
                                         <div class="mb-3">
                                             <label class="form-label small fw-bold">Password</label>
-                                            <input type="password" name="password" class="form-control" placeholder="Set password" required>
+                                            <input type="password" name="password" class="form-control"
+                                                placeholder="Set password" required>
                                         </div>
                                         <button type="submit" class="btn btn-primary w-100 shadow-sm">
                                             <i class="bi bi-person-plus me-2"></i>Create Account
@@ -302,12 +328,16 @@
                                             <tbody>
                                                 {% for student in all_students_list %}
                                                 <tr>
-                                                    <td><span class="badge bg-light text-dark">#{{ student.id }}</span></td>
+                                                    <td><span class="badge bg-light text-dark">#{{ student.id }}</span>
+                                                    </td>
                                                     <td class="fw-bold">{{ student.username }}</td>
                                                     <td class="text-end">
-                                                        <form action="{{ url_for('delete_student', student_id=student.id) }}" method="POST" 
-                                                              onsubmit="return confirm('Permanently delete student {{ student.username }}?');">
-                                                            <button type="submit" class="btn btn-sm btn-outline-danger px-3 rounded-pill">
+                                                        <form
+                                                            action="{{ url_for('delete_student', student_id=student.id) }}"
+                                                            method="POST"
+                                                            onsubmit="return confirm('Permanently delete student {{ student.username }}?');">
+                                                            <button type="submit"
+                                                                class="btn btn-sm btn-outline-danger px-3 rounded-pill">
                                                                 <i class="bi bi-trash me-1"></i>Delete
                                                             </button>
                                                         </form>
@@ -325,7 +355,8 @@
                     <div class="tab-pane fade" id="history-pane">
                         <div class="d-flex justify-content-between align-items-center mb-4">
                             <h3 class="fw-bold mb-0">Session History</h3>
-                            <button id="deleteSelectedBtn" class="btn btn-danger shadow-sm d-none" onclick="deleteSelectedSessions()">
+                            <button id="deleteSelectedBtn" class="btn btn-danger shadow-sm d-none"
+                                onclick="deleteSelectedSessions()">
                                 <i class="bi bi-trash3 me-2"></i>Delete Selected
                             </button>
                         </div>
@@ -335,7 +366,8 @@
                                 <table class="table table-hover align-middle mb-0" id="historyTable">
                                     <thead class="table-light">
                                         <tr>
-                                            <th style="width: 40px;"><input type="checkbox" class="form-check-input" id="selectAll" onclick="toggleAllSessions(this)"></th>
+                                            <th style="width: 40px;"><input type="checkbox" class="form-check-input"
+                                                    id="selectAll" onclick="toggleAllSessions(this)"></th>
                                             <th>Date & Time</th>
                                             <th>Subject</th>
                                             <th>Room</th>
@@ -346,16 +378,27 @@
                                     <tbody>
                                         {% for sess in past_sessions %}
                                         <tr id="row-{{ sess.id }}">
-                                            <td><input type="checkbox" class="form-check-input session-checkbox" value="{{ sess.id }}" onchange="updateDeleteButton()"></td>
+                                            <td><input type="checkbox" class="form-check-input session-checkbox"
+                                                    value="{{ sess.id }}" onchange="updateDeleteButton()"></td>
                                             <td>{{ sess.start_time.strftime('%d %b %Y, %H:%M') }}</td>
                                             <td><span class="badge bg-info text-dark">{{ sess.subject }}</span></td>
                                             <td>{{ sess.lab_name }}</td>
                                             <td><strong>{{ sess.count }}</strong> Students</td>
                                             <td>
                                                 <div class="btn-group shadow-sm">
-                                                    <a href="{{ url_for('export_attendance', session_id=sess.id) }}" class="btn btn-sm btn-success"><i class="bi bi-file-earmark-excel"></i></a>
-                                                    <a href="{{ url_for('export_pdf', session_id=sess.id) }}" class="btn btn-sm btn-danger"><i class="bi bi-file-earmark-pdf"></i></a>
-                                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteIndividualSession('{{ sess.id }}')"><i class="bi bi-trash"></i></button>
+                                                    <a href="{{ url_for('export_attendance', session_id=sess.id) }}"
+                                                        class="btn btn-sm btn-success" title="Export as Excel">
+                                                        <i class="bi bi-file-earmark-excel"></i>
+                                                    </a>
+                                                    <a href="{{ url_for('export_pdf', session_id=sess.id) }}"
+                                                        class="btn btn-sm btn-danger" title="Export as PDF">
+                                                        <i class="bi bi-file-earmark-pdf"></i>
+                                                    </a>
+                                                    <button class="btn btn-sm btn-outline-danger"
+                                                        onclick="deleteIndividualSession('{{ sess.id }}')"
+                                                        title="Delete Session">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -388,15 +431,21 @@
                                         <td>
                                             <div class="d-flex align-items-center">
                                                 <span class="me-2" style="width: 45px;">{{ s.percentage or 0 }}%</span>
-                                                <div class="progress flex-grow-1" style="height: 8px; background-color: #e9ecef;">
-                                                    <div class="progress-bar attendance-bar {{ 'bg-danger' if s.status == 'At-Risk' else 'bg-success' }}" 
-                                                         role="progressbar" data-width="{{ s.percentage|default(0) }}" style="width: 0%;"></div>
+                                                <div class="progress flex-grow-1"
+                                                    style="height: 8px; background-color: #e9ecef;">
+                                                    <div class="progress-bar attendance-bar {{ 'bg-danger' if s.status == 'At-Risk' else 'bg-success' }}"
+                                                        role="progressbar" data-width="{{ s.percentage|default(0) }}"
+                                                        style="width: 0%;"></div>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td><span class="badge {{ 'bg-danger' if s.status == 'At-Risk' else 'bg-success' }}">{{ s.status }}</span></td>
+                                        <td><span
+                                                class="badge {{ 'bg-danger' if s.status == 'At-Risk' else 'bg-success' }}">{{
+                                                s.status }}</span></td>
                                         <td class="text-end">
-                                            <button class="btn btn-sm btn-outline-primary" onclick="document.getElementById('studentSearchInput').value='{{ s.name }}'; searchStudent();"><i class="bi bi-search"></i></button>
+                                            <button class="btn btn-sm btn-outline-primary"
+                                                onclick="document.getElementById('studentSearchInput').value='{{ s.name }}'; searchStudent();"><i
+                                                    class="bi bi-search"></i></button>
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -419,11 +468,16 @@
                                             {% endfor %}
                                         </select>
                                     </div>
-                                    <div class="col-md-4"><label class="form-label fw-bold">From Date</label><input type="date" name="start_date" class="form-control" required></div>
-                                    <div class="col-md-4"><label class="form-label fw-bold">To Date</label><input type="date" name="end_date" class="form-control" required></div>
+                                    <div class="col-md-4"><label class="form-label fw-bold">From Date</label><input
+                                            type="date" name="start_date" class="form-control" required></div>
+                                    <div class="col-md-4"><label class="form-label fw-bold">To Date</label><input
+                                            type="date" name="end_date" class="form-control" required></div>
                                     <div class="col-12 mt-5 text-center">
-                                        <button type="submit" class="btn btn-success px-5 me-2"><i class="bi bi-file-earmark-excel me-2"></i>Export Excel</button>
-                                        <button type="submit" formaction="{{ url_for('export_overall_pdf') }}" class="btn btn-danger px-5"><i class="bi bi-file-earmark-pdf me-2"></i>Export PDF</button>
+                                        <button type="submit" class="btn btn-success px-5 me-2"><i
+                                                class="bi bi-file-earmark-excel me-2"></i>Export Excel</button>
+                                        <button type="submit" formaction="{{ url_for('export_overall_pdf') }}"
+                                            class="btn btn-danger px-5"><i
+                                                class="bi bi-file-earmark-pdf me-2"></i>Export PDF</button>
                                     </div>
                                 </div>
                             </form>
