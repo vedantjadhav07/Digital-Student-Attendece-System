@@ -78,7 +78,7 @@ def teacher_dashboard():
     # Calculate attendance for all students based ONLY on this teacher's labs
     total_labs_by_me = AttendanceSession.query.filter_by(teacher_id=current_user.id).count()
     student_analysis = []
-    
+    print(student_analysis)
     all_students = User.query.filter_by(role='student').all()
     for student in all_students:
         presences = AttendanceRecord.query.join(AttendanceSession).filter(
@@ -264,6 +264,7 @@ def advanced_export():
     attendance_subquery = attendance_subquery.group_by(AttendanceRecord.student_id).subquery()
 
     results = db.session.query(
+        User.full_name,
         User.username,
         func.coalesce(attendance_subquery.c.present_count, 0)
     ).filter(User.role == 'student')\
@@ -271,9 +272,10 @@ def advanced_export():
 
     # 3. Build Excel
     report_data = []
-    for username, count in results:
+    for f_name, u_name, count in results:
         report_data.append({
-            "Student Name": username,
+            "Student Name": f_name if f_name else "N/A",
+            "Enrollment No": u_name,  # Add this column
             "Date Range": f"{start_date_str} to {end_date_str}",
             "Total Attendance": total_lectures,
             "Actual Present": count,
@@ -346,14 +348,16 @@ def submit_attendance():
     try:
         # Extract last part of IP (e.g., .45)
         pc_num = int(user_ip.split('.')[-1]) if user_ip != '127.0.0.1' else current_user.id
+        
     except (ValueError, IndexError):
         pc_num = 0
-
+ 
     # --- NEW SECURITY RANGE CHECK ---
     start = session.start_pc
     end = start + session.lab_capacity - 1
 
     if not (start <= pc_num <= end):
+        # 31 < 6 <60 
         return jsonify({
             "success": False, 
             "message": f"Wrong Lab! You are at PC-{pc_num}, but this session is for PCs {start} to {end}."
@@ -403,6 +407,7 @@ def export_attendance(session_id):
     # 2. Query ALL students and OUTER JOIN with attendance for this specific session
     # This ensures every student is listed, regardless of presence
     results = db.session.query(
+        User.full_name,
         User.username,
         AttendanceRecord.timestamp
     ).filter(User.role == 'student')\
@@ -411,9 +416,10 @@ def export_attendance(session_id):
 
     # 3. Process data: Separate Date and Time into different columns
     report_data = []
-    for username, ts in results:
+    for f_name, u_name, ts in results:
         report_data.append({
-            "Student Name": username,
+            "Student Name": f_name if f_name else "N/A",  # Use Full Name
+            "Enrollment No": u_name,                        # Use Enrollment
             "Status": "Present" if ts else "Absent",
             "Date": ts.strftime("%Y-%m-%d") if ts else "-",
             "Time": ts.strftime("%H:%M:%S") if ts else "-"
@@ -519,33 +525,24 @@ def extend_session():
 @app.route('/export_pdf/<int:session_id>')
 @login_required
 def export_pdf(session_id):
-    if current_user.role != 'teacher':
-        return "Unauthorized", 403
-
-    # 1. Fetch Session and Attendance Data
     session = AttendanceSession.query.get_or_404(session_id)
     results = db.session.query(
+        User.full_name,
         User.username,
         AttendanceRecord.timestamp
     ).filter(User.role == 'student')\
      .outerjoin(AttendanceRecord, (User.id == AttendanceRecord.student_id) & (AttendanceRecord.session_id == session_id))\
      .all()
 
-    # 2. Render HTML Template
-    html = render_template('pdf_single_report.html', 
-                           session=session, 
-                           results=results, 
-                           faculty=current_user.username)
-    
-    # 3. Generate PDF with Config
+    html = render_template('pdf_single_report.html', session=session, results=results, faculty=current_user.username)
     try:
         pdf = pdfkit.from_string(html, False, configuration=config)
         response = make_response(pdf)
         response.headers['Content-Type'] = 'application/pdf'
-        response.headers['Content-Disposition'] = f'attachment; filename=Session_{session.subject}_{session_id}.pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename=Report_{session.subject}.pdf'
         return response
-    except OSError as e:
-        flash("PDF Engine not found. Please ensure wkhtmltopdf is installed.", "danger")
+    except Exception as e:
+        flash(f"PDF Error: {str(e)}", "danger")
         return redirect(url_for('teacher_dashboard'))
 
 
@@ -591,6 +588,7 @@ def export_overall_pdf():
     attendance_subquery = attendance_subquery.group_by(AttendanceRecord.student_id).subquery()
 
     results = db.session.query(
+        User.full_name,
         User.username,
         func.coalesce(attendance_subquery.c.present_count, 0)
     ).filter(User.role == 'student')\
@@ -598,10 +596,11 @@ def export_overall_pdf():
 
     # 3. Format data for the PDF Template
     report_list = []
-    for username, count in results:
+    for f_name, u_name, count in results:
         percentage = round((count / total_lectures) * 100, 2)
         report_list.append({
-            "name": username,
+            "name": f_name if f_name else "N/A",
+            "username": u_name,
             "count": count,
             "total": total_lectures,
             "perc": percentage
@@ -654,25 +653,17 @@ def delete_sessions():
 @app.route('/manage_students', methods=['POST'])
 @login_required
 def manage_students():
-    if current_user.role != 'teacher':
-        return jsonify({"success": False, "message": "Unauthorized"}), 403
-        
-    username = request.form.get('username')
-    password = request.form.get('password')
-    
-    if not username or not password:
-        flash("Username and password are required.", "danger")
-        return redirect(url_for('teacher_dashboard', tab='students'))
-
-    # Check if user already exists
-    if User.query.filter_by(username=username).first():
-        flash("Username already exists.", "warning")
-    else:
-        new_student = User(username=username, password=password, role='student')
+    if current_user.role != 'teacher': return jsonify({"success": False}), 403
+    f_name = request.form.get('full_name')
+    u_name = request.form.get('username')
+    pwd = request.form.get('password')
+    if not User.query.filter_by(username=u_name).first():
+        new_student = User(full_name=f_name, username=u_name, password=pwd, role='student')
         db.session.add(new_student)
         db.session.commit()
-        flash(f"Student '{username}' added successfully!", "success")
-        
+        flash("Student registered successfully!", "success")
+    else:
+        flash("Enrollment Number already exists!", "danger")
     return redirect(url_for('teacher_dashboard', tab='students'))
 
 

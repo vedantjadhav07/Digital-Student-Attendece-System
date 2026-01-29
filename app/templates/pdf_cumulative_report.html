@@ -8,28 +8,30 @@
         th, td { border: 1px solid #dee2e6; padding: 12px; text-align: left; }
         th { background-color: #f8f9fa; color: #764ba2; font-weight: bold; }
         
-        /* CSS Classes to replace the inline logic errors */
         .at-risk { color: #dc3545; font-weight: bold; }
-        .safe { color: #198754; }
+        .safe { color: #198754; font-weight: bold; }
         
-        .summary-box { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .summary-box { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #eee; }
+        .footer-sig { margin-top: 80px; float: right; border-top: 1px solid #000; width: 250px; text-align: center; padding-top: 5px; }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>Cumulative Attendance Summary</h1>
         <h3>Subject: {{ subject if subject != 'ALL' else 'All Assigned Subjects' }}</h3>
+        <p>Faculty In-charge: <strong>{{ faculty }}</strong></p>
     </div>
 
     <div class="summary-box">
         <p><strong>Date Range:</strong> {{ start }} to {{ end }}</p>
-        <p><strong>Requirement:</strong> Students below 75% are highlighted as At-Risk.</p>
+        <p><strong>Note:</strong> Students with attendance below <strong>75%</strong> are highlighted as At-Risk.</p>
     </div>
 
     <table>
         <thead>
             <tr>
                 <th>Student Name</th>
+                <th>Enrollment No</th>
                 <th>Labs Attended</th>
                 <th>Total Sessions</th>
                 <th>Attendance %</th>
@@ -39,6 +41,7 @@
             {% for s in data %}
             <tr>
                 <td>{{ s.name }}</td>
+                <td><code>{{ s.username }}</code></td>
                 <td>{{ s.count }}</td>
                 <td>{{ s.total }}</td>
                 <td class="{{ 'at-risk' if s.perc < 75 else 'safe' }}">
@@ -49,10 +52,8 @@
         </tbody>
     </table>
 
-    <div style="margin-top: 100px;">
-        <div style="float: right; border-top: 1px solid #000; width: 200px; text-align: center;">
-            <p>HOD / Faculty Signature</p>
-        </div>
+    <div class="footer-sig">
+        <p>Authorized Signature & Stamp</p>
     </div>
 </body>
 </html>
