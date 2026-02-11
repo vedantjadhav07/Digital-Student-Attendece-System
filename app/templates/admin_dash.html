@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Portal | Net-Verify</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root { --admin-gradient: linear-gradient(135deg, #1e293b 0%, #334155 100%); }
+        .sidebar { background: var(--admin-gradient); color: white; min-height: 100vh; display: flex; flex-direction: column; }
+        .nav-link { color: rgba(255,255,255,0.8); margin-bottom: 5px; }
+        .sidebar .nav { flex: 1 1 auto; display: flex; flex-direction: column; }
+        .nav-link.active { background: rgba(255,255,255,0.1); color: white; font-weight: bold; }
+        .nav-link:hover { color: white; }
+    </style>
+</head>
+<body>
+<div class="container-fluid">
+    <div class="row">
+        <nav class="col-md-2 sidebar p-3">
+            <h4 class="mb-4 ps-2"><i class="bi bi-shield-lock me-2"></i>Admin</h4>
+            <div class="nav flex-column nav-pills" role="tablist">
+                <button class="nav-link active text-start" data-bs-toggle="pill" data-bs-target="#teachers-pane">
+                    <i class="bi bi-person-workspace me-2"></i>Manage Teachers
+                </button>
+                <button class="nav-link text-start" data-bs-toggle="pill" data-bs-target="#students-pane">
+                    <i class="bi bi-people me-2"></i>Manage Students
+                </button>
+                <button class="nav-link text-start" data-bs-toggle="pill" data-bs-target="#labs-pane">
+                    <i class="bi bi-pc-display me-2"></i>Manage Labs
+                </button>
+                <a href="/logout" class="nav-link text-danger mt-auto text-start"><i class="bi bi-box-arrow-left me-2"></i>Logout</a>
+            </div>
+        </nav>
+
+        <main class="col-md-10 p-5 bg-light">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for cat, msg in messages %}
+                        <div class="alert alert-{{cat}} alert-dismissible fade show">{{msg}}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <div class="tab-content">
+                <div class="tab-pane fade show active" id="teachers-pane">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card shadow-sm border-0 p-4">
+                                <h5 class="mb-3 text-info">Add New Faculty</h5>
+                                <form action="{{ url_for('admin_user_ops', action='add') }}" method="POST">
+                                    <input type="hidden" name="role" value="teacher">
+                                    <div class="mb-3"><label class="form-label small">Full Name</label><input type="text" name="full_name" class="form-control" required></div>
+                                    <div class="mb-3"><label class="form-label small">Username</label><input type="text" name="username" class="form-control" required></div>
+                                    <div class="mb-3"><label class="form-label small">Password</label><input type="password" name="password" class="form-control" required></div>
+                                    <button type="submit" class="btn btn-info text-white w-100">Register Faculty</button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="card shadow-sm border-0 p-3">
+                                <h5 class="mb-3">Existing Faculty</h5>
+                                <table class="table table-hover">
+                                    <thead class="table-light"><tr><th>Name</th><th>Username</th><th>Action</th></tr></thead>
+                                    <tbody>
+                                        {% for t in teachers %}
+                                        <tr>
+                                            <td>{{ t.full_name }}</td>
+                                            <td>{{ t.username }}</td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-primary" onclick="openEditUserModal('{{ t.id }}', '{{ t.full_name }}', '{{ t.username }}')">Edit</button>
+                                                <a href="{{ url_for('admin_user_ops', action='delete', id=t.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this teacher?')">Delete</a>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="students-pane">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card shadow-sm border-0 p-4">
+                                <h5 class="mb-3 text-info">Add New Student</h5>
+                                <form action="{{ url_for('admin_user_ops', action='add') }}" method="POST">
+                                    <input type="hidden" name="role" value="student">
+                                    <div class="mb-3"><label class="form-label small">Full Name</label><input type="text" name="full_name" class="form-control" required></div>
+                                    <div class="mb-3"><label class="form-label small">Enrollment No</label><input type="text" name="username" class="form-control" required></div>
+                                    <div class="mb-3"><label class="form-label small">Password</label><input type="password" name="password" class="form-control" required></div>
+                                    <button type="submit" class="btn btn-info text-white w-100">Register Student</button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="card shadow-sm border-0 p-3">
+                                <h5 class="mb-3">Registered Students</h5>
+                                <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                                    <table class="table table-hover">
+                                        <thead class="table-light"><tr><th>Name</th><th>Enrollment</th><th>Action</th></tr></thead>
+                                        <tbody>
+                                            {% for s in students %}
+                                            <tr>
+                                                <td>{{ s.full_name }}</td>
+                                                <td>{{ s.username }}</td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-primary" onclick="openEditUserModal('{{ s.id }}', '{{ s.full_name }}', '{{ s.username }}')">Edit</button>
+                                                    <a href="{{ url_for('admin_user_ops', action='delete', id=s.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this student?')">Delete</a>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="labs-pane">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card shadow-sm border-0 p-4">
+                                <h5 class="mb-3 text-info">Add New Lab Room</h5>
+                                <form action="{{ url_for('admin_lab_ops', action='add') }}" method="POST">
+                                    <div class="mb-3"><label class="form-label small">Lab Name</label><input type="text" name="room_name" class="form-control" placeholder="e.g. Lab 1" required></div>
+                                    <div class="mb-3"><label class="form-label small">IP Range Start</label><input type="text" name="ip_start" class="form-control" placeholder="e.g. 192.168.1.1" required></div>
+                                    <div class="mb-3"><label class="form-label small">IP Range End</label><input type="text" name="ip_end" class="form-control" placeholder="e.g. 192.168.1.30" required></div>
+                                    <button type="submit" class="btn btn-info text-white w-100">Add Lab</button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="card shadow-sm border-0 p-3">
+                                <h5 class="mb-3">Configured Labs</h5>
+                                <table class="table table-hover">
+                                    <thead class="table-light"><tr><th>Lab Name</th><th>IP Range</th><th>Action</th></tr></thead>
+                                    <tbody>
+                                        {% for lab in labs %}
+                                        <tr>
+                                            <td>{{ lab.room_name }}</td>
+                                            <td>{{ lab.ip_start }} - {{ lab.ip_end }}</td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-primary" onclick="openEditLabModal('{{ lab.id }}', '{{ lab.room_name }}', '{{ lab.ip_start }}', '{{ lab.ip_end }}')">Edit</button>
+                                                <a href="{{ url_for('admin_lab_ops', action='delete', id=lab.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this Lab?')">Delete</a>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+
+<div class="modal fade" id="editUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form id="editUserForm" method="POST" class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Edit User</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="mb-3"><label class="form-label">Full Name</label><input type="text" id="edit_full_name" name="full_name" class="form-control" required></div>
+                <div class="mb-3"><label class="form-label">Username</label><input type="text" id="edit_username" name="username" class="form-control" required></div>
+                <div class="mb-3"><label class="form-label">New Password (leave blank to keep)</label><input type="password" name="password" class="form-control"></div>
+            </div>
+            <div class="modal-footer"><button type="submit" class="btn btn-primary">Update</button></div>
+        </form>
+    </div>
+</div>
+
+<div class="modal fade" id="editLabModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form id="editLabForm" method="POST" class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Edit Lab</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="mb-3"><label class="form-label">Lab Name</label><input type="text" id="edit_lab_name" name="room_name" class="form-control" required></div>
+                <div class="mb-3"><label class="form-label">IP Start</label><input type="text" id="edit_ip_start" name="ip_start" class="form-control" required></div>
+                <div class="mb-3"><label class="form-label">IP End</label><input type="text" id="edit_ip_end" name="ip_end" class="form-control" required></div>
+            </div>
+            <div class="modal-footer"><button type="submit" class="btn btn-primary">Update</button></div>
+        </form>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    function openEditUserModal(id, name, username) {
+        document.getElementById('editUserForm').action = `/admin/user/edit/${id}`;
+        document.getElementById('edit_full_name').value = name;
+        document.getElementById('edit_username').value = username;
+        new bootstrap.Modal(document.getElementById('editUserModal')).show();
+    }
+    function openEditLabModal(id, name, start, end) {
+        document.getElementById('editLabForm').action = `/admin/lab/edit/${id}`;
+        document.getElementById('edit_lab_name').value = name;
+        document.getElementById('edit_ip_start').value = start;
+        document.getElementById('edit_ip_end').value = end;
+        new bootstrap.Modal(document.getElementById('editLabModal')).show();
+    }
+</script>
+</body>
+</html>

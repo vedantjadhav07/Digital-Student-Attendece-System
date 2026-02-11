@@ -5,7 +5,7 @@ from flask import jsonify, render_template, request, redirect, url_for, flash, s
 from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy import func
 from . import login_manager, db, socketio 
-from .models import AttendanceRecord, User, AttendanceSession,TeacherSubject
+from .models import AttendanceRecord, User, AttendanceSession,TeacherSubject,LabRoom
 from flask import current_app as app
 import pdfkit
 from flask import make_response
@@ -30,7 +30,12 @@ def login():
         
         if user and user.password == password:
             login_user(user)
-            return redirect(url_for('teacher_dashboard' if user.role == 'teacher' else 'student_dashboard'))
+            if user.role == 'admin':
+              return redirect(url_for('admin_dashboard'))
+            elif user.role == 'teacher':
+              return redirect(url_for('teacher_dashboard'))
+            else:
+              return redirect(url_for('student_dashboard'))
         
         flash('Invalid credentials', 'danger')
     return render_template('login.html')
@@ -683,6 +688,92 @@ def delete_student(student_id):
     
     return redirect(url_for('teacher_dashboard', tab='students'))
 
+@app.route('/admin_dashboard')
+@login_required
+def admin_dashboard():
+    if current_user.role != 'admin': return redirect(url_for('login'))
+    
+    teachers = User.query.filter_by(role='teacher').all()
+    students = User.query.filter_by(role='student').all()
+    labs = LabRoom.query.all()
+    
+    return render_template('admin_dash.html', teachers=teachers, students=students, labs=labs)
+
+# -- Admin: User Management (Add/Edit/Delete) --
+@app.route('/admin/user/<action>', methods=['POST'])
+@app.route('/admin/user/<action>/<int:id>', methods=['POST', 'GET'])
+@login_required
+def admin_user_ops(action, id=None):
+    if current_user.role != 'admin': return "Unauthorized", 403
+
+    if action == 'add':
+        role = request.form.get('role')
+        full_name = request.form.get('full_name')
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        if User.query.filter_by(username=username).first():
+            flash(f"Error: Username '{username}' already exists.", "danger")
+        else:
+            new_user = User(full_name=full_name, username=username, password=password, role=role)
+            db.session.add(new_user)
+            db.session.commit()
+            flash(f"{role.capitalize()} added successfully!", "success")
+
+    elif action == 'edit' and id:
+        user = User.query.get_or_404(id)
+        user.full_name = request.form.get('full_name')
+        user.username = request.form.get('username')
+        new_pass = request.form.get('password')
+        if new_pass: # Only update password if provided
+            user.password = new_pass
+        db.session.commit()
+        flash("User details updated.", "success")
+
+    elif action == 'delete' and id:
+        user = User.query.get_or_404(id)
+        # Optional: Cascade delete logic here
+        if user.role == 'student':
+            AttendanceRecord.query.filter_by(student_id=user.id).delete()
+        db.session.delete(user)
+        db.session.commit()
+        flash("User deleted.", "info")
+
+    return redirect(url_for('admin_dashboard'))
+
+# -- Admin: Lab Management (Add/Edit/Delete) --
+@app.route('/admin/lab/<action>', methods=['POST'])
+@app.route('/admin/lab/<action>/<int:id>', methods=['POST', 'GET'])
+@login_required
+def admin_lab_ops(action, id=None):
+    if current_user.role != 'admin': return "Unauthorized", 403
+
+    if action == 'add':
+        name = request.form.get('room_name')
+        start = request.form.get('ip_start')
+        end = request.form.get('ip_end')
+        new_lab = LabRoom(room_name=name, ip_start=start, ip_end=end)
+        db.session.add(new_lab)
+        db.session.commit()
+        flash(f"Lab '{name}' created!", "success")
+
+    elif action == 'edit' and id:
+        lab = LabRoom.query.get_or_404(id)
+        lab.room_name = request.form.get('room_name')
+        lab.ip_start = request.form.get('ip_start')
+        lab.ip_end = request.form.get('ip_end')
+        db.session.commit()
+        flash("Lab updated successfully.", "success")
+
+    elif action == 'delete' and id:
+        lab = LabRoom.query.get_or_404(id)
+        # Warning: This might affect session history if not handled carefully
+        AttendanceSession.query.filter_by(lab_id=lab.id).delete()
+        db.session.delete(lab)
+        db.session.commit()
+        flash("Lab deleted.", "info")
+
+    return redirect(url_for('admin_dashboard'))
 
 @app.route('/logout')
 def logout():
