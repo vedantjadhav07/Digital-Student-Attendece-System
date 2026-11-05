@@ -1,0 +1,178 @@
+{% extends "base/base.html" %}
+
+{% block title %}Admin Overview{% endblock %}
+{% block page_title %}System Administration{% endblock %}
+
+{% block content %}
+<!-- Top Metrics Row -->
+<div class="row g-3 mb-4">
+    <div class="col-xl-3 col-sm-6">
+        <div class="stat-card">
+            <div class="stat-icon primary">
+                <i class="bi bi-people-fill"></i>
+            </div>
+            <div>
+                <div class="stat-title">Registered Students</div>
+                <div class="stat-value">{{ total_students }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-sm-6">
+        <div class="stat-card">
+            <div class="stat-icon success">
+                <i class="bi bi-person-workspace"></i>
+            </div>
+            <div>
+                <div class="stat-title">Faculty Members</div>
+                <div class="stat-value">{{ total_teachers }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-sm-6">
+        <div class="stat-card">
+            <div class="stat-icon warning">
+                <i class="bi bi-display"></i>
+            </div>
+            <div>
+                <div class="stat-title">Computer Labs</div>
+                <div class="stat-value">{{ total_labs }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-sm-6">
+        <div class="stat-card">
+            <div class="stat-icon danger">
+                <i class="bi bi-cpu-fill"></i>
+            </div>
+            <div>
+                <div class="stat-title">Workstations Active</div>
+                <div class="stat-value">{{ total_workstations }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Secondary Stats & Quick Actions -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-8">
+        <!-- Recent Attendance Sessions -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-broadcast me-2 text-primary"></i>Recent Laboratory Attendance Sessions</h6>
+                <span class="badge bg-primary rounded-pill px-3 py-1">{{ active_sessions }} Active Now</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Subject</th>
+                                <th>Faculty</th>
+                                <th>Lab</th>
+                                <th>Date & Time</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in recent_sessions %}
+                                <tr>
+                                    <td>
+                                        <div class="fw-semibold text-dark">{{ s.subject.name }}</div>
+                                        <small class="text-muted">{{ s.subject.code }}</small>
+                                    </td>
+                                    <td>{{ s.teacher.full_name }}</td>
+                                    <td>{{ s.laboratory.name }}</td>
+                                    <td>
+                                        <small class="text-muted">{{ s.start_time.strftime('%d-%b-%Y %H:%M') }}</small>
+                                    </td>
+                                    <td>
+                                        {% if s.is_active %}
+                                            <span class="badge bg-success">ACTIVE</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">COMPLETED</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="5" class="text-center py-4 text-muted">No attendance sessions recorded yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Quick Administrative Tools -->
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-tools me-2 text-secondary"></i>Administrative Controls</h6>
+            </div>
+            <div class="card-body p-3 d-flex flex-column gap-2">
+                <a href="{{ url_for('admin.users') }}" class="btn btn-light text-start border p-3 d-flex align-items-center gap-3">
+                    <i class="bi bi-person-plus-fill text-primary fs-4"></i>
+                    <div>
+                        <div class="fw-bold text-dark">Manage User Accounts</div>
+                        <small class="text-muted">Add students & teachers or import via CSV</small>
+                    </div>
+                </a>
+
+                <a href="{{ url_for('admin.labs') }}" class="btn btn-light text-start border p-3 d-flex align-items-center gap-3">
+                    <i class="bi bi-pc-display text-success fs-4"></i>
+                    <div>
+                        <div class="fw-bold text-dark">Manage Laboratories</div>
+                        <small class="text-muted">Configure lab IP ranges and workstation capacities</small>
+                    </div>
+                </a>
+
+                <a href="{{ url_for('admin.academics') }}" class="btn btn-light text-start border p-3 d-flex align-items-center gap-3">
+                    <i class="bi bi-book-half text-warning fs-4"></i>
+                    <div>
+                        <div class="fw-bold text-dark">Academics & Subjects</div>
+                        <small class="text-muted">Manage departments and faculty assignments</small>
+                    </div>
+                </a>
+
+                <!-- Database Snapshot Button -->
+                <form action="{{ url_for('admin.backup_database') }}" method="POST" class="mt-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-secondary w-100 py-2">
+                        <i class="bi bi-database-down me-1"></i>Backup Database Snapshot
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Recent Audit Activity -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-shield-shaded me-2 text-info"></i>Audit Log Feed</h6>
+                <a href="{{ url_for('admin.audit_logs') }}" class="small text-decoration-none">View All</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 280px;">
+                    <table class="table table-sm mb-0">
+                        <tbody>
+                            {% for a in recent_audit %}
+                                <tr>
+                                    <td class="ps-3">
+                                        <div class="fw-semibold small text-dark">{{ a.action }}</div>
+                                        <small class="text-muted" style="font-size: 0.72rem;">{{ a.details or '' }}</small>
+                                    </td>
+                                    <td class="text-end pe-3">
+                                        <small class="text-muted" style="font-size: 0.72rem;">{{ a.timestamp.strftime('%H:%M:%S') }}</small>
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="2" class="text-center py-3 text-muted small">No audit events logged.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

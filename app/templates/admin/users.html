@@ -1,0 +1,245 @@
+{% extends "base/base.html" %}
+
+{% block title %}Manage Users{% endblock %}
+{% block page_title %}User Account Management{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+    <!-- Role Filter Pills -->
+    <div class="btn-group" role="group">
+        <a href="{{ url_for('admin.users', role='all') }}" class="btn btn-sm {% if current_role == 'all' %}btn-primary{% else %}btn-outline-secondary{% endif %}">All Users</a>
+        <a href="{{ url_for('admin.users', role='student') }}" class="btn btn-sm {% if current_role == 'student' %}btn-primary{% else %}btn-outline-secondary{% endif %}">Students</a>
+        <a href="{{ url_for('admin.users', role='teacher') }}" class="btn btn-sm {% if current_role == 'teacher' %}btn-primary{% else %}btn-outline-secondary{% endif %}">Faculty</a>
+        <a href="{{ url_for('admin.users', role='admin') }}" class="btn btn-sm {% if current_role == 'admin' %}btn-primary{% else %}btn-outline-secondary{% endif %}">Admins</a>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#bulkImportModal">
+            <i class="bi bi-file-earmark-arrow-up me-1"></i>Import Students (CSV/Excel)
+        </button>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createUserModal">
+            <i class="bi bi-person-plus-fill me-1"></i>Create New User
+        </button>
+    </div>
+</div>
+
+<!-- Users Table -->
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Username / ID</th>
+                        <th>Full Name</th>
+                        <th>Role</th>
+                        <th>Department</th>
+                        <th>Semester</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in users %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td class="fw-bold">{{ u.username }}</td>
+                            <td>{{ u.full_name }}</td>
+                            <td>
+                                <span class="badge {% if u.role == 'admin' %}bg-dark{% elif u.role == 'teacher' %}bg-info text-dark{% else %}bg-primary{% endif %} text-uppercase">
+                                    {{ u.role }}
+                                </span>
+                            </td>
+                            <td>{{ u.department.name if u.department else '-' }}</td>
+                            <td>{{ u.semester or '-' }}</td>
+                            <td>
+                                {% if u.is_active %}
+                                    <span class="badge bg-success bg-opacity-10 text-success">Active</span>
+                                {% else %}
+                                    <span class="badge bg-danger bg-opacity-10 text-danger">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary"
+                                        onclick="openEditUserModal({{ u.id }}, '{{ u.full_name }}', '{{ u.username }}', '{{ u.email or '' }}', '{{ u.department_id or '' }}', '{{ u.semester or '' }}', {{ 'true' if u.is_active else 'false' }})">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                {% if u.id != current_user.id %}
+                                    <form action="{{ url_for('admin.delete_user', user_id=u.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Permanently delete account for {{ u.username }}?');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="8" class="text-center py-4 text-muted">No users found for this filter.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: CREATE USER -->
+<div class="modal fade" id="createUserModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form action="{{ url_for('admin.create_user') }}" method="POST" class="modal-content border-0 shadow">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Create User Account</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Account Role</label>
+                    <select name="role" class="form-select" id="new_role_select" required>
+                        <option value="student" selected>Student</option>
+                        <option value="teacher">Faculty / Teacher</option>
+                        <option value="admin">Administrator</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Username / Enrollment No / Employee ID</label>
+                    <input type="text" name="username" class="form-control" placeholder="e.g. 21CS045" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Full Name</label>
+                    <input type="text" name="full_name" class="form-control" placeholder="e.g. John Doe" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Email Address (Optional)</label>
+                    <input type="email" name="email" class="form-control" placeholder="user@college.edu">
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-8">
+                        <label class="form-label small fw-bold">Department</label>
+                        <select name="department_id" class="form-select">
+                            <option value="">-- No Department --</option>
+                            {% for d in departments %}
+                                <option value="{{ d.id }}">{{ d.name }} ({{ d.code }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label small fw-bold">Semester</label>
+                        <input type="number" name="semester" class="form-control" placeholder="1-8" min="1" max="8">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Initial Password</label>
+                    <input type="password" name="password" class="form-control" placeholder="Minimum 6 characters" required minlength="6">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create Account</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL: EDIT USER -->
+<div class="modal fade" id="editUserModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form id="editUserForm" method="POST" class="modal-content border-0 shadow">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Edit User Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Username (Read-Only)</label>
+                    <input type="text" id="edit_username" class="form-control bg-light" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Full Name</label>
+                    <input type="text" id="edit_full_name" name="full_name" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Email Address</label>
+                    <input type="email" id="edit_email" name="email" class="form-control">
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-8">
+                        <label class="form-label small fw-bold">Department</label>
+                        <select id="edit_department_id" name="department_id" class="form-select">
+                            <option value="">-- No Department --</option>
+                            {% for d in departments %}
+                                <option value="{{ d.id }}">{{ d.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label small fw-bold">Semester</label>
+                        <input type="number" id="edit_semester" name="semester" class="form-control" min="1" max="8">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Reset Password (leave empty to keep current)</label>
+                    <input type="password" name="password" class="form-control" placeholder="New Password">
+                </div>
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="edit_is_active" name="is_active" value="true">
+                    <label class="form-check-label small fw-bold" for="edit_is_active">Account Active</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL: BULK IMPORT CSV -->
+<div class="modal fade" id="bulkImportModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form action="{{ url_for('admin.import_students_csv') }}" method="POST" enctype="multipart/form-data" class="modal-content border-0 shadow">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="bi bi-file-earmark-arrow-up text-success me-2"></i>Bulk Student Import</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="small text-muted mb-3">
+                    Upload a CSV or Excel spreadsheet containing your student records.
+                </p>
+                <div class="p-3 bg-light rounded-3 small mb-3 border">
+                    <div class="fw-bold mb-1">Expected Spreadsheet Columns:</div>
+                    <code>username</code> (or <code>enrollment_no</code>), <code>full_name</code>, <code>email</code> (optional), <code>semester</code> (optional), <code>password</code> (defaults to student123 if blank).
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Select File (.csv, .xlsx, .xls)</label>
+                    <input type="file" name="file" class="form-control" accept=".csv, .xlsx, .xls" required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-success"><i class="bi bi-upload me-1"></i>Start Import</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function openEditUserModal(id, fullName, username, email, departmentId, semester, isActive) {
+        document.getElementById('editUserForm').action = `/admin/user/edit/${id}`;
+        document.getElementById('edit_username').value = username;
+        document.getElementById('edit_full_name').value = fullName;
+        document.getElementById('edit_email').value = email;
+        document.getElementById('edit_department_id').value = departmentId;
+        document.getElementById('edit_semester').value = semester;
+        document.getElementById('edit_is_active').checked = isActive;
+        new bootstrap.Modal(document.getElementById('editUserModal')).show();
+    }
+</script>
+{% endblock %}
+

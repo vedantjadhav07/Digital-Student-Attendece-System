@@ -1,0 +1,107 @@
+{% extends "base/base.html" %}
+
+{% block title %}Manage Workstations{% endblock %}
+{% block page_title %}Lab Workstation Management{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+    <!-- Filter by Laboratory -->
+    <div class="d-flex align-items-center gap-2">
+        <span class="small fw-bold text-muted text-uppercase">Filter Lab:</span>
+        <div class="btn-group" role="group">
+            <a href="{{ url_for('admin.workstations') }}" class="btn btn-sm {% if not current_lab_id %}btn-primary{% else %}btn-outline-secondary{% endif %}">All Labs</a>
+            {% for lab in labs %}
+                <a href="{{ url_for('admin.workstations', lab_id=lab.id) }}" class="btn btn-sm {% if current_lab_id == lab.id %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ lab.name }}</a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Workstation Code</th>
+                        <th>Laboratory</th>
+                        <th>Seat No</th>
+                        <th>Bound IP Address</th>
+                        <th>Secret Token</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ws in workstations %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td class="fw-bold font-monospace">{{ ws.workstation_code }}</td>
+                            <td>{{ ws.laboratory.name }}</td>
+                            <td><span class="badge bg-light text-dark border">#{{ ws.seat_number }}</span></td>
+                            <td class="font-monospace">{{ ws.ip_address or 'DHCP / Dynamic' }}</td>
+                            <td>
+                                <code class="small text-muted">{{ ws.secret_token[:12] if ws.secret_token else 'N/A' }}...</code>
+                            </td>
+                            <td>
+                                {% if ws.status == 'active' %}
+                                    <span class="badge bg-success bg-opacity-10 text-success" id="badge-ws-{{ ws.id }}">Active</span>
+                                {% elif ws.status == 'maintenance' %}
+                                    <span class="badge bg-warning bg-opacity-10 text-warning" id="badge-ws-{{ ws.id }}">Maintenance</span>
+                                {% else %}
+                                    <span class="badge bg-danger bg-opacity-10 text-danger" id="badge-ws-{{ ws.id }}">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-light border dropdown-toggle" data-bs-toggle="dropdown">
+                                        Status
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 small">
+                                        <li><button class="dropdown-item" onclick="updateWorkstationStatus({{ ws.id }}, 'active')"><i class="bi bi-check-circle text-success me-2"></i>Active</button></li>
+                                        <li><button class="dropdown-item" onclick="updateWorkstationStatus({{ ws.id }}, 'maintenance')"><i class="bi bi-tools text-warning me-2"></i>Maintenance</button></li>
+                                        <li><button class="dropdown-item" onclick="updateWorkstationStatus({{ ws.id }}, 'inactive')"><i class="bi bi-slash-circle text-danger me-2"></i>Inactive</button></li>
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="8" class="text-center py-4 text-muted">No workstations provisioned for this filter.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function updateWorkstationStatus(wsId, newStatus) {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        const formData = new FormData();
+        formData.append('status', newStatus);
+
+        fetch(`/admin/workstation/toggle_status/${wsId}`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken },
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                const badge = document.getElementById(`badge-ws-${wsId}`);
+                if (badge) {
+                    badge.textContent = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
+                    if (newStatus === 'active') badge.className = 'badge bg-success bg-opacity-10 text-success';
+                    else if (newStatus === 'maintenance') badge.className = 'badge bg-warning bg-opacity-10 text-warning';
+                    else badge.className = 'badge bg-danger bg-opacity-10 text-danger';
+                }
+                showToast(`Workstation status updated to ${newStatus}`, 'success');
+            }
+        });
+    }
+</script>
+{% endblock %}
+

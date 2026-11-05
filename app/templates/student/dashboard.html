@@ -1,0 +1,223 @@
+{% extends "base/base.html" %}
+
+{% block title %}Student Dashboard{% endblock %}
+{% block page_title %}Student Attendance Portal{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Left Column: Live Session & Attendance Marking -->
+    <div class="col-lg-7">
+        <!-- Live Attendance Card -->
+        <div class="card mb-4 border-0 shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="spinner-grow spinner-grow-sm text-danger" role="status"></span>
+                    <span class="fw-bold small text-uppercase text-secondary">Live Laboratory Detection</span>
+                </div>
+                <span class="badge bg-light text-secondary border px-3 py-1">
+                    <i class="bi bi-laptop me-1"></i> Client IP: {{ client_ip }}
+                </span>
+            </div>
+
+            <div class="card-body p-4">
+                {% if active_session %}
+                    <div class="p-4 rounded-4" style="background: rgba(99, 102, 241, 0.04); border: 1.5px solid rgba(99, 102, 241, 0.15);">
+                        <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+                            <div>
+                                <span class="badge bg-success mb-2 px-3 py-1 fw-bold">ACTIVE SESSION OPEN</span>
+                                <h3 class="fw-bold text-dark mb-1">{{ active_session.subject.name }}</h3>
+                                <p class="text-muted small mb-0">
+                                    <span class="me-3"><i class="bi bi-tag me-1"></i>Code: <strong>{{ active_session.subject.code }}</strong></span>
+                                    <span class="me-3"><i class="bi bi-display me-1"></i>{{ active_session.laboratory.name }}</span>
+                                    <span><i class="bi bi-person-workspace me-1"></i>Faculty: {{ active_session.teacher.full_name }}</span>
+                                </p>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-light text-dark border px-3 py-2 fw-semibold">
+                                    <i class="bi bi-cpu me-1"></i>
+                                    {% if assigned_seat %}
+                                        Seat #{{ assigned_seat }} Detected
+                                    {% else %}
+                                        Auto Seat Assigned
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+
+                        {% if already_marked %}
+                            <div class="alert alert-success d-flex align-items-center mb-0 mt-3 shadow-sm border-0">
+                                <i class="bi bi-check-circle-fill fs-3 me-3"></i>
+                                <div>
+                                    <div class="fw-bold">Attendance Verified & Recorded</div>
+                                    <small class="text-muted">You are marked present for this session at Workstation #{{ assigned_seat }}.</small>
+                                </div>
+                            </div>
+                        {% else %}
+                            <button id="markAttendanceBtn" onclick="submitStudentAttendance({{ active_session.id }})" class="btn btn-primary w-100 py-3 fw-bold fs-5 mt-3 shadow">
+                                <i class="bi bi-fingerprint me-2"></i>MARK MY ATTENDANCE
+                            </button>
+                        {% endif %}
+
+                        <div id="attendanceFeedbackMsg"></div>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5 bg-light rounded-4 border border-dashed">
+                        <i class="bi bi-cloud-slash text-muted opacity-50 display-4"></i>
+                        <h5 class="fw-bold text-secondary mt-3">No Active Attendance Session</h5>
+                        <p class="text-muted small mb-0 px-4">
+                            Your faculty has not initiated an attendance session for your enrolled subjects in this computer lab yet.
+                        </p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Subject-Wise Attendance Breakdown -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-header">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-bar-chart-fill text-primary me-2"></i>Subject-Wise Attendance Breakdown</h6>
+            </div>
+            <div class="card-body">
+                {% if stats and stats.subject_stats %}
+                    <div class="d-flex flex-column gap-3">
+                        {% for sub in stats.subject_stats %}
+                            <div>
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <div>
+                                        <span class="fw-bold text-dark">{{ sub.name }}</span>
+                                        <small class="text-muted ms-1">({{ sub.code }})</small>
+                                    </div>
+                                    <div>
+                                        <span class="fw-bold me-2">{{ sub.attended }}/{{ sub.total }}</span>
+                                        <span class="badge {% if sub.percentage >= 75 %}bg-success{% else %}bg-danger{% endif %} rounded-pill px-2 py-1">
+                                            {{ sub.percentage }}%
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="progress" style="height: 8px;">
+                                    <div class="progress-bar {% if sub.percentage >= 75 %}bg-success{% else %}bg-danger{% endif %}"
+                                         role="progressbar" style="width: {{ sub.percentage }}%" aria-valuenow="{{ sub.percentage }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                                {% if sub.is_at_risk %}
+                                    <small class="text-danger fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>At-risk: Below minimum 75% criterion</small>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted text-center py-3">No subject attendance records found yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Student Metrics & Attendance History -->
+    <div class="col-lg-5">
+        <!-- Profile / Summary Card -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <div class="d-flex align-items-center gap-3 mb-4">
+                    <div class="user-avatar" style="width: 54px; height: 54px; font-size: 1.3rem;">
+                        {{ current_user.username[0]|upper }}
+                    </div>
+                    <div>
+                        <h5 class="fw-bold mb-0 text-dark">{{ current_user.full_name }}</h5>
+                        <div class="text-muted small">Roll / Enrollment: <strong>{{ current_user.username }}</strong></div>
+                        <div class="text-muted small">
+                            {{ current_user.department.name if current_user.department else 'General Department' }} &bull; Semester {{ current_user.semester or 'N/A' }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Overall Attendance Ring / Big Stat -->
+                <div class="p-3 rounded-3 text-center mb-3" style="background: var(--primary-light);">
+                    <small class="text-uppercase fw-bold text-muted">Overall Attendance Record</small>
+                    <div class="display-5 fw-bold {% if stats.overall_percentage >= 75 %}text-primary{% else %}text-danger{% endif %} my-1">
+                        {{ stats.overall_percentage }}%
+                    </div>
+                    {% if stats.overall_percentage < 75 %}
+                        <span class="badge badge-at-risk">
+                            <i class="bi bi-exclamation-octagon-fill me-1"></i> ATTENDANCE CRITICAL (&lt; 75%)
+                        </span>
+                    {% else %}
+                        <span class="badge bg-success bg-opacity-25 text-success fw-bold px-3 py-1">
+                            <i class="bi bi-shield-check me-1"></i> SAFE STANDING
+                        </span>
+                    {% endif %}
+                </div>
+
+                <div class="row g-2 text-center">
+                    <div class="col-4">
+                        <div class="border rounded-3 p-2 bg-light">
+                            <div class="small text-muted">Conducted</div>
+                            <div class="fw-bold fs-5 text-dark">{{ stats.total_conducted }}</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="border rounded-3 p-2 bg-light">
+                            <div class="small text-muted">Attended</div>
+                            <div class="fw-bold fs-5 text-success">{{ stats.total_attended }}</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="border rounded-3 p-2 bg-light">
+                            <div class="small text-muted">Absent</div>
+                            <div class="fw-bold fs-5 text-danger">{{ stats.absent_count }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Logs Table -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-clock-history me-2"></i>Recent Attendance Logs</h6>
+                <a href="{{ url_for('student.export_personal') }}" class="btn btn-sm btn-outline-primary rounded-pill px-3">
+                    <i class="bi bi-file-earmark-excel me-1"></i>Export
+                </a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 380px;">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Subject</th>
+                                <th>Seat</th>
+                                <th>Date & Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if stats and stats.recent_logs %}
+                                {% for log in stats.recent_logs %}
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold text-dark">{{ log.subject_name }}</div>
+                                            <small class="text-muted">{{ log.lab_name }}</small>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-light text-dark border">#{{ log.seat_number }}</span>
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">{{ log.timestamp.strftime('%d-%b-%Y %H:%M') }}</small>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="3" class="text-center py-4 text-muted small">No attendance records logged yet.</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/student_attendance.js') }}"></script>
+{% endblock %}
+

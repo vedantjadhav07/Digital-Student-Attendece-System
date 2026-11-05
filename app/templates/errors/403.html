@@ -1,0 +1,15 @@
+{% extends "base/base.html" %}
+
+{% block title %}Access Denied (403){% endblock %}
+
+{% block content %}
+<div class="text-center py-5">
+    <div class="display-1 fw-bold text-danger mb-3">403</div>
+    <h3 class="fw-bold text-dark mb-2">Access Prohibited</h3>
+    <p class="text-muted small mx-auto mb-4" style="max-width: 460px;">
+        You do not have administrative or faculty authorization to view this resource.
+    </p>
+    <a href="{{ url_for('auth.login') }}" class="btn btn-primary px-4">Return to Dashboard</a>
+</div>
+{% endblock %}
+

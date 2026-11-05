@@ -1,0 +1,172 @@
+/* Workstation Grid CSS */
+
+.workstation-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 16px;
+    padding: 10px 0;
+}
+
+@media (min-width: 1400px) {
+    .grid-capacity-30 {
+        grid-template-columns: repeat(6, 1fr);
+    }
+    .grid-capacity-60 {
+        grid-template-columns: repeat(10, 1fr);
+    }
+    .grid-capacity-90 {
+        grid-template-columns: repeat(10, 1fr);
+    }
+}
+
+.ws-node {
+    background: #ffffff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: var(--radius-md);
+    padding: 14px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    min-height: 105px;
+    position: relative;
+    cursor: default;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.ws-node .ws-seat {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #64748b;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.ws-node .ws-icon {
+    font-size: 1.6rem;
+    margin-bottom: 6px;
+    transition: transform 0.2s ease;
+}
+
+.ws-node .ws-occupant {
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    max-width: 100%;
+}
+
+.ws-node .ws-time {
+    font-size: 0.68rem;
+    color: rgba(255, 255, 255, 0.85);
+    margin-top: 2px;
+}
+
+/* Status Variants */
+.ws-node.status-available {
+    background: #ffffff;
+    border-color: #e2e8f0;
+    color: #475569;
+}
+
+.ws-node.status-available .ws-icon {
+    color: #cbd5e1;
+}
+
+.ws-node.status-available .ws-occupant {
+    color: #94a3b8;
+    font-weight: 400;
+}
+
+.ws-node.status-attended {
+    background: linear-gradient(145deg, #10b981 0%, #059669 100%);
+    border-color: #059669;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+    transform: translateY(-2px);
+}
+
+.ws-node.status-attended .ws-seat {
+    color: #d1fae5;
+}
+
+.ws-node.status-attended .ws-icon {
+    color: #ffffff;
+}
+
+.ws-node.status-attended .ws-occupant {
+    color: #ffffff;
+}
+
+/* Pulse animation on checkin */
+.ws-node.just-marked {
+    animation: attendedPulse 1.2s ease-out;
+}
+
+@keyframes attendedPulse {
+    0% {
+        transform: scale(0.9);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.8);
+    }
+    50% {
+        transform: scale(1.08);
+        box-shadow: 0 0 0 16px rgba(16, 185, 129, 0);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+.ws-node.status-inactive {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    color: #94a3b8;
+    opacity: 0.65;
+}
+
+.ws-node.status-inactive .ws-icon {
+    color: #94a3b8;
+}
+
+/* Grid Summary Header */
+.grid-meta-bar {
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.grid-legend {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    font-size: 0.82rem;
+    font-weight: 500;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.legend-dot.attended { background: #10b981; }
+.legend-dot.available { background: #cbd5e1; }
+.legend-dot.inactive { background: #94a3b8; }
+

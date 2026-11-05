@@ -1,0 +1,20 @@
+[Unit]
+Description=Lab-Secure Digital Student Attendance Service
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/labsecure
+Environment="PATH=/var/www/labsecure/venv/bin"
+EnvironmentFile=/var/www/labsecure/.env
+ExecStart=/var/www/labsecure/venv/bin/gunicorn --config /var/www/labsecure/deploy/gunicorn.conf.py run:app
+Restart=always
+RestartSec=5
+KillMode=mixed
+TimeoutStopSec=30
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+

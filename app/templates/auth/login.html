@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In | Lab-Secure Digital Attendance</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --navy-dark: #0f172a;
+            --navy-card: #1e293b;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            background-color: #f8fafc;
+        }
+        .login-layout {
+            display: flex;
+            width: 100vw;
+            min-height: 100vh;
+        }
+        .intro-pane {
+            flex: 1.1;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #31104b 100%);
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 80px;
+            position: relative;
+            overflow: hidden;
+        }
+        .intro-pane::before {
+            content: "";
+            position: absolute;
+            top: -100px;
+            right: -100px;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.25) 0%, rgba(0,0,0,0) 70%);
+            border-radius: 50%;
+        }
+        .feature-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 16px 20px;
+            border-radius: 14px;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            transition: transform 0.2s ease, background 0.2s ease;
+        }
+        .feature-card:hover {
+            transform: translateX(6px);
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .feature-icon-box {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            color: white;
+            flex-shrink: 0;
+        }
+        .form-pane {
+            flex: 0.9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            background-color: #f8fafc;
+        }
+        .auth-card {
+            width: 100%;
+            max-width: 430px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 20px;
+            padding: 42px 36px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.02);
+        }
+        .brand-badge {
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.6rem;
+            color: white;
+            box-shadow: 0 8px 16px rgba(99, 102, 241, 0.3);
+            margin-bottom: 22px;
+        }
+        .form-control {
+            border-radius: 10px;
+            padding: 12px 14px;
+            border: 1.5px solid #e2e8f0;
+            font-size: 0.95rem;
+        }
+        .form-control:focus {
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+        }
+        .btn-submit {
+            background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+            border: none;
+            padding: 13px;
+            font-weight: 600;
+            border-radius: 10px;
+            color: white;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+            transition: all 0.2s ease;
+        }
+        .btn-submit:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 18px rgba(99, 102, 241, 0.35);
+        }
+        @media (max-width: 992px) {
+            .intro-pane { display: none; }
+            .form-pane { flex: 1; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="login-layout">
+    <div class="intro-pane">
+        <span class="badge bg-white bg-opacity-10 text-white px-3 py-2 rounded-pill small fw-semibold text-uppercase mb-3" style="width: fit-content; letter-spacing: 1px;">
+            <i class="bi bi-shield-lock-fill me-1 text-primary"></i> Academic Laboratory Security
+        </span>
+        <h1 class="display-5 fw-bold mb-3">Lab-Secure</h1>
+        <p class="fs-5 text-white-50 mb-5" style="max-width: 520px;">
+            Enterprise attendance verification engineered for physical computer laboratories with workstation validation and real-time monitoring.
+        </p>
+
+        <div class="feature-card">
+            <div class="feature-icon-box">
+                <i class="bi bi-cpu-fill"></i>
+            </div>
+            <div>
+                <h6 class="mb-1 fw-bold">Workstation-Locked Validation</h6>
+                <small class="text-white-50">Hardware IP, subnet boundaries, and token authorization eliminate proxy attendance.</small>
+            </div>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon-box">
+                <i class="bi bi-broadcast"></i>
+            </div>
+            <div>
+                <h6 class="mb-1 fw-bold">Real-Time Seat Monitoring</h6>
+                <small class="text-white-50">Instant WebSockets reflect student check-ins on live 30, 60, and 90 PC grid layouts.</small>
+            </div>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon-box">
+                <i class="bi bi-graph-up-arrow"></i>
+            </div>
+            <div>
+                <h6 class="mb-1 fw-bold">At-Risk Analytics & Export</h6>
+                <small class="text-white-50">Automated tracking of students below 75% attendance with one-click Excel reports.</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-pane">
+        <div class="auth-card">
+            <div class="brand-badge">
+                <i class="bi bi-shield-lock"></i>
+            </div>
+            <h3 class="fw-bold text-dark mb-1">Welcome Back</h3>
+            <p class="text-muted small mb-4">Sign in with your institutional credentials</p>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for cat, msg in messages %}
+                        <div class="alert alert-{{ 'danger' if cat in ['error', 'danger'] else cat }} small py-2 mb-3 rounded-3" role="alert">
+                            <i class="bi bi-info-circle-fill me-1"></i> {{ msg }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form action="{{ url_for('auth.login') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-secondary">Username / Enrollment No / Faculty ID</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0 text-muted" style="border-radius: 10px 0 0 10px;">
+                            <i class="bi bi-person"></i>
+                        </span>
+                        <input type="text" name="username" class="form-control border-start-0" style="border-radius: 0 10px 10px 0;" placeholder="e.g. 21CS001 or admin" required autofocus>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label small fw-bold text-secondary">Password</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0 text-muted" style="border-radius: 10px 0 0 10px;">
+                            <i class="bi bi-lock"></i>
+                        </span>
+                        <input type="password" name="password" class="form-control border-start-0" style="border-radius: 0 10px 10px 0;" placeholder="••••••••" required>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="remember" id="rememberMe">
+                        <label class="form-check-label small text-muted" for="rememberMe">Remember me</label>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-submit w-100 mb-3">
+                    <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
+                </button>
+            </form>
+
+            <div class="text-center mt-4 pt-3 border-top">
+                <small class="text-muted">
+                    College Computer Laboratory Management System &bull; <span class="fw-semibold">Lab-Secure 2.0</span>
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
+

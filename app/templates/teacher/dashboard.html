@@ -1,0 +1,566 @@
+{% extends "base/base.html" %}
+
+{% block title %}Faculty Portal{% endblock %}
+{% block page_title %}Faculty Laboratory Attendance Portal{% endblock %}
+
+{% block content %}
+<!-- Top Action Bar -->
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+    <div>
+        <h4 class="fw-bold mb-1 text-dark">Laboratory Management</h4>
+        <p class="text-muted small mb-0">Control live lab sessions, monitor workstation check-ins in real-time, and generate reports.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#cumulativeReportModal">
+            <i class="bi bi-file-earmark-spreadsheet me-1"></i>Cumulative Report
+        </button>
+        <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#addSubjectModal">
+            <i class="bi bi-plus-circle me-1"></i>Add Subject
+        </button>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newSessionModal">
+            <i class="bi bi-play-circle-fill me-1"></i>Launch Attendance Portal
+        </button>
+    </div>
+</div>
+
+<!-- Tabs Navigation -->
+<ul class="nav nav-pills mb-4 gap-2" id="teacherTab" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active px-4 py-2" id="live-tab" data-bs-toggle="pill" data-bs-target="#live-pane" role="tab">
+            <i class="bi bi-broadcast me-2"></i>Live Monitoring
+            {% if active_session %}
+                <span class="badge bg-success ms-2">Active</span>
+            {% endif %}
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link px-4 py-2" id="at-risk-tab" data-bs-toggle="pill" data-bs-target="#at-risk-pane" role="tab">
+            <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>At-Risk Students
+            {% if at_risk_students %}
+                <span class="badge bg-danger ms-2">{{ at_risk_students|length }}</span>
+            {% endif %}
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link px-4 py-2" id="history-tab" data-bs-toggle="pill" data-bs-target="#history-pane" role="tab">
+            <i class="bi bi-clock-history me-2"></i>Session History
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link px-4 py-2" id="students-roster-tab" data-bs-toggle="pill" data-bs-target="#students-roster-pane" role="tab">
+            <i class="bi bi-people me-2"></i>Student Roster
+        </button>
+    </li>
+</ul>
+
+<!-- Tab Content -->
+<div class="tab-content" id="teacherTabContent">
+    <!-- PANE 1: LIVE LAB MONITORING -->
+    <div class="tab-pane fade show active" id="live-pane" role="tabpanel">
+        {% if active_session %}
+            <!-- Active Session Header Bar -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                        <div>
+                            <span class="badge bg-success px-3 py-1 mb-2 fw-semibold">
+                                <i class="bi bi-record-circle me-1"></i>PORTAL ACTIVE NOW
+                            </span>
+                            <h3 class="fw-bold mb-1 text-dark">{{ active_session.subject.name }} ({{ active_session.subject.code }})</h3>
+                            <div class="text-muted small">
+                                <span class="me-3"><i class="bi bi-display me-1"></i>{{ active_session.laboratory.name }}</span>
+                                <span class="me-3"><i class="bi bi-key me-1"></i>Session Code: <strong class="text-dark">{{ active_session.session_code }}</strong></span>
+                                <span><i class="bi bi-cpu me-1"></i>Capacity: <strong>{{ active_session.lab_capacity }} Workstations</strong></span>
+                            </div>
+                        </div>
+
+                        <!-- Timer & Action Controls -->
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="text-end">
+                                <div class="text-muted small mb-1 fw-bold">TIME REMAINING</div>
+                                <div id="sessionTimerDisplay" class="badge bg-success fs-5 px-3 py-2">--:--</div>
+                            </div>
+
+                            <!-- Pause Button -->
+                            <form action="{{ url_for('teacher.pause_session', session_id=active_session.id) }}" method="POST" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-outline-warning" title="Pause / Resume Attendance">
+                                    <i class="bi {% if active_session.is_paused %}bi-play-fill{% else %}bi-pause-fill{% endif %}"></i>
+                                    {{ 'Resume' if active_session.is_paused else 'Pause' }}
+                                </button>
+                            </form>
+
+                            <!-- Extend Button -->
+                            <form action="{{ url_for('teacher.extend_session', session_id=active_session.id) }}" method="POST" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="minutes" value="10">
+                                <button type="submit" class="btn btn-outline-primary" title="Extend by 10 minutes">
+                                    <i class="bi bi-clock-fill me-1"></i>+10 Min
+                                </button>
+                            </form>
+
+                            <!-- Stop Button -->
+                            <form action="{{ url_for('teacher.stop_session', session_id=active_session.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to finalize and close this attendance session?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-danger" title="Close Attendance Session">
+                                    <i class="bi bi-stop-circle-fill me-1"></i>Close Portal
+                                </button>
+                            </form>
+
+                            <!-- Export Session Excel -->
+                            <a href="{{ url_for('reports.export_session_excel', session_id=active_session.id) }}" class="btn btn-success">
+                                <i class="bi bi-file-earmark-excel-fill me-1"></i>Export
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats & Progress Bar -->
+            <div class="row g-3 mb-4">
+                <div class="col-md-4">
+                    <div class="card border-0 shadow-sm p-3">
+                        <div class="small text-muted fw-bold">STUDENTS ATTENDED</div>
+                        <div class="d-flex align-items-baseline gap-2 mt-1">
+                            <div class="display-6 fw-bold text-success" id="livePresentCounter">{{ session_data.present_count }}</div>
+                            <div class="text-muted">/ <span id="liveCapacityCounter">{{ active_session.lab_capacity }}</span> Seats</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-0 shadow-sm p-3">
+                        <div class="small text-muted fw-bold">PENDING / ABSENT</div>
+                        <div class="display-6 fw-bold text-secondary mt-1">{{ session_data.absent_count }}</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-0 shadow-sm p-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="small text-muted fw-bold">COMPLETION RATE</span>
+                            <span class="fw-bold text-primary" id="livePercentageText">{{ session_data.completion_pct }}%</span>
+                        </div>
+                        <div class="progress mt-3" style="height: 10px;">
+                            <div id="liveProgressBar" class="progress-bar bg-primary" role="progressbar" style="width: {{ session_data.completion_pct }}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WORKSTATION REAL-TIME GRID -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold"><i class="bi bi-grid-3x3-gap-fill text-primary me-2"></i>Physical Workstation Layout ({{ active_session.lab_capacity }} Workstations)</h6>
+                    <div class="grid-legend">
+                        <div class="legend-item"><span class="legend-dot attended"></span> Present</div>
+                        <div class="legend-item"><span class="legend-dot available"></span> Available</div>
+                        <div class="legend-item"><span class="legend-dot inactive"></span> Inactive</div>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <div class="workstation-grid grid-capacity-{{ active_session.lab_capacity }}" id="workstationGrid">
+                        {% for seat in range(1, active_session.lab_capacity + 1) %}
+                            {% set is_marked = seat in marked_seats %}
+                            {% set seat_info = marked_seats.get(seat) %}
+                            <div class="ws-node {% if is_marked %}status-attended{% else %}status-available{% endif %}" id="ws-seat-{{ seat }}">
+                                <div class="ws-seat">PC-{{ seat }}</div>
+                                <div class="ws-icon">
+                                    <i class="bi {% if is_marked %}bi-person-check-fill{% else %}bi-display{% endif %}"></i>
+                                </div>
+                                <div class="ws-occupant" title="{{ seat_info.student_name if is_marked else 'Unoccupied' }}">
+                                    {{ seat_info.student_name if is_marked else 'Available' }}
+                                </div>
+                                <div class="ws-time">
+                                    {{ seat_info.time if is_marked else '' }}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Session Rosters: Present & Absent -->
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0 fw-bold text-success"><i class="bi bi-check-circle-fill me-2"></i>Present Students ({{ session_data.present_count }})</h6>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive" style="max-height: 320px;">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Seat</th>
+                                            <th>Enrollment</th>
+                                            <th>Student Name</th>
+                                            <th>Time In</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="presentRosterTableBody">
+                                        {% for rec in session_data.present_records %}
+                                            <tr>
+                                                <td><span class="badge bg-success">#{{ rec.seat_number }}</span></td>
+                                                <td class="fw-bold">{{ rec.student.username }}</td>
+                                                <td>{{ rec.student.full_name }}</td>
+                                                <td><small class="text-muted">{{ rec.timestamp.strftime('%H:%M:%S') }}</small></td>
+                                            </tr>
+                                        {% else %}
+                                            <tr><td colspan="4" class="text-center text-muted py-3">No students marked yet.</td></tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0 fw-bold text-danger"><i class="bi bi-x-circle-fill me-2"></i>Pending / Absent Students ({{ session_data.absent_count }})</h6>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive" style="max-height: 320px;">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Enrollment</th>
+                                            <th>Student Name</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for stu in session_data.absent_students %}
+                                            <tr>
+                                                <td>{{ loop.index }}</td>
+                                                <td class="fw-bold">{{ stu.username }}</td>
+                                                <td>{{ stu.full_name }}</td>
+                                                <td><span class="badge bg-danger bg-opacity-10 text-danger">Pending</span></td>
+                                            </tr>
+                                        {% else %}
+                                            <tr><td colspan="4" class="text-center text-muted py-3">100% Attendance achieved!</td></tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        {% else %}
+            <!-- No Active Session Empty State -->
+            <div class="card border-0 shadow-sm text-center p-5">
+                <div class="py-4">
+                    <div class="stat-icon primary mx-auto mb-3" style="width: 70px; height: 70px; font-size: 2rem;">
+                        <i class="bi bi-broadcast"></i>
+                    </div>
+                    <h4 class="fw-bold text-dark">No Active Attendance Session</h4>
+                    <p class="text-muted small mx-auto mb-4" style="max-width: 480px;">
+                        Start a new session to open the attendance portal for students in your assigned computer laboratory.
+                    </p>
+                    <button class="btn btn-primary px-4 py-2" data-bs-toggle="modal" data-bs-target="#newSessionModal">
+                        <i class="bi bi-play-circle-fill me-2"></i>Launch Attendance Session Now
+                    </button>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- PANE 2: AT-RISK STUDENTS -->
+    <div class="tab-pane fade" id="at-risk-pane" role="tabpanel">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-0 fw-bold text-danger"><i class="bi bi-exclamation-octagon-fill me-2"></i>Students Below 75% Attendance Criterion</h6>
+                    <small class="text-muted">Filtered across your conducted laboratory sessions</small>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Enrollment No</th>
+                                <th>Student Full Name</th>
+                                <th>Subject</th>
+                                <th>Conducted</th>
+                                <th>Attended</th>
+                                <th>Attendance %</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for student in at_risk_students %}
+                                <tr>
+                                    <td>{{ loop.index }}</td>
+                                    <td class="fw-bold">{{ student.username }}</td>
+                                    <td>{{ student.name }}</td>
+                                    <td>{{ student.subject }}</td>
+                                    <td>{{ student.total }}</td>
+                                    <td>{{ student.attended }}</td>
+                                    <td>
+                                        <div class="fw-bold text-danger">{{ student.percentage }}%</div>
+                                        <div class="progress" style="height: 5px;">
+                                            <div class="progress-bar bg-danger" style="width: {{ student.percentage }}%"></div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-at-risk">AT-RISK</span>
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr>
+                                    <td colspan="8" class="text-center py-4 text-muted">
+                                        <i class="bi bi-shield-check text-success display-6 d-block mb-2"></i>
+                                        All students currently maintain satisfactory attendance (&gt; 75%).
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PANE 3: SESSION HISTORY -->
+    <div class="tab-pane fade" id="history-pane" role="tabpanel">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-clock-history me-2"></i>Conducted Lab Sessions</h6>
+                <small class="text-muted">Showing past 30 sessions</small>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Subject</th>
+                                <th>Lab Room</th>
+                                <th>Date & Time</th>
+                                <th>Capacity</th>
+                                <th>Attended</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for session, count in past_sessions %}
+                                <tr>
+                                    <td>{{ loop.index }}</td>
+                                    <td>
+                                        <div class="fw-bold text-dark">{{ session.subject.name }}</div>
+                                        <small class="text-muted">{{ session.subject.code }}</small>
+                                    </td>
+                                    <td>{{ session.laboratory.name }}</td>
+                                    <td>
+                                        <div>{{ session.start_time.strftime('%d-%b-%Y') }}</div>
+                                        <small class="text-muted">{{ session.start_time.strftime('%H:%M') }} - {{ session.end_time.strftime('%H:%M') }}</small>
+                                    </td>
+                                    <td>{{ session.lab_capacity }}</td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border fw-bold">{{ count }} Students</span>
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('reports.export_session_excel', session_id=session.id) }}" class="btn btn-sm btn-outline-success" title="Download Excel">
+                                            <i class="bi bi-file-earmark-excel"></i>
+                                        </a>
+                                        <a href="{{ url_for('reports.print_session_report', session_id=session.id) }}" target="_blank" class="btn btn-sm btn-outline-secondary" title="Print Report">
+                                            <i class="bi bi-printer"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr>
+                                    <td colspan="7" class="text-center py-4 text-muted">No past sessions found.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PANE 4: STUDENT ROSTER -->
+    <div class="tab-pane fade" id="students-roster-pane" role="tabpanel">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-people me-2"></i>Registered Students Database</h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Enrollment No</th>
+                                <th>Full Name</th>
+                                <th>Department</th>
+                                <th>Semester</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in students_list %}
+                                <tr>
+                                    <td>{{ loop.index }}</td>
+                                    <td class="fw-bold">{{ s.username }}</td>
+                                    <td>{{ s.full_name }}</td>
+                                    <td>{{ s.department.name if s.department else 'General' }}</td>
+                                    <td>{{ s.semester or 'N/A' }}</td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="5" class="text-center py-4 text-muted">No students registered yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: LAUNCH NEW SESSION -->
+<div class="modal fade" id="newSessionModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form action="{{ url_for('teacher.start_session') }}" method="POST" class="modal-content border-0 shadow">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="bi bi-play-circle-fill text-primary me-2"></i>Launch Attendance Session</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Select Subject</label>
+                    <select name="subject_id" class="form-select" required>
+                        <option value="" disabled selected>-- Choose Subject --</option>
+                        {% for sub in subjects %}
+                            <option value="{{ sub.id }}">{{ sub.name }} ({{ sub.code }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Select Computer Laboratory</label>
+                    <select name="lab_id" class="form-select" required>
+                        <option value="" disabled selected>-- Choose Lab --</option>
+                        {% for lab in labs %}
+                            <option value="{{ lab.id }}">{{ lab.name }} ({{ lab.default_capacity }} PCs)</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-6">
+                        <label class="form-label small fw-bold">Workstation Capacity</label>
+                        <select name="capacity" class="form-select" required>
+                            <option value="30" selected>30 Workstations</option>
+                            <option value="60">60 Workstations</option>
+                            <option value="90">90 Workstations</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-bold">Duration (Minutes)</label>
+                        <input type="number" name="duration" class="form-control" value="10" min="5" max="60" required>
+                    </div>
+                </div>
+
+                <div class="alert alert-info small mb-0">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Starting a new session will automatically close any other active sessions you have opened previously.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary px-4"><i class="bi bi-play-fill me-1"></i>Launch Now</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL: ADD SUBJECT -->
+<div class="modal fade" id="addSubjectModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form action="{{ url_for('teacher.add_subject') }}" method="POST" class="modal-content border-0 shadow">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="bi bi-plus-circle-fill text-primary me-2"></i>Add Subject to Profile</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Subject Name</label>
+                    <input type="text" name="subject_name" class="form-control" placeholder="e.g. Operating Systems Lab" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Subject Code</label>
+                    <input type="text" name="subject_code" class="form-control text-uppercase" placeholder="e.g. CS301" required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Subject</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL: CUMULATIVE EXCEL EXPORT -->
+<div class="modal fade" id="cumulativeReportModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form action="{{ url_for('reports.export_cumulative_excel') }}" method="POST" class="modal-content border-0 shadow">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="bi bi-file-earmark-spreadsheet text-success me-2"></i>Cumulative Excel Report</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Select Subject</label>
+                    <select name="subject_id" class="form-select">
+                        <option value="">-- All My Subjects --</option>
+                        {% for sub in subjects %}
+                            <option value="{{ sub.id }}">{{ sub.name }} ({{ sub.code }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-6">
+                        <label class="form-label small fw-bold">Start Date</label>
+                        <input type="date" name="start_date" class="form-control" required>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-bold">End Date</label>
+                        <input type="date" name="end_date" class="form-control" required>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-success"><i class="bi bi-download me-1"></i>Generate Excel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/live_monitor.js') }}"></script>
+{% if active_session %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        new LabMonitor({
+            sessionId: {{ active_session.id }},
+            capacity: {{ active_session.lab_capacity }},
+            remainingSeconds: {{ active_session.remaining_seconds }},
+            isPaused: {{ 'true' if active_session.is_paused else 'false' }}
+        });
+    });
+</script>
+{% endif %}
+{% endblock %}
+
