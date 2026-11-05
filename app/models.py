@@ -154,15 +154,18 @@ class Laboratory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False, unique=True)  # e.g., 'Lab 1', 'Lab 2'
     code = db.Column(db.String(20), nullable=True, unique=True)
-    location = db.Column(db.String(100), nullable=True)  # e.g. 'Room 302, 3rd Floor'
+    location = db.Column(db.String(100), nullable=True)  # e.g. 'Computer Block, 2nd Floor'
+    room_number = db.Column(db.String(30), nullable=True)  # e.g. 'Room 304'
+    department_id = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=True)
     subnet_cidr = db.Column(db.String(50), nullable=True)  # e.g. '192.168.1.0/24'
-    ip_start = db.Column(db.String(50), nullable=True)   # e.g. '192.168.1.1'
-    ip_end = db.Column(db.String(50), nullable=True)     # e.g. '192.168.1.30'
+    ip_start = db.Column(db.String(50), nullable=True)   # e.g. '127.0.0.1' or '192.168.1.1'
+    ip_end = db.Column(db.String(50), nullable=True)     # e.g. '127.0.0.30'
     default_capacity = db.Column(db.Integer, default=30)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relationships
+    department = db.relationship('Department', backref=db.backref('laboratories', lazy='dynamic'))
     workstations = db.relationship('Workstation', back_populates='laboratory', cascade='all, delete-orphan')
     sessions = db.relationship('AttendanceSession', back_populates='laboratory', lazy='dynamic')
 
@@ -172,6 +175,10 @@ class Laboratory(db.Model):
             'name': self.name,
             'code': self.code,
             'location': self.location,
+            'room_number': self.room_number,
+            'department_id': self.department_id,
+            'department_name': self.department.name if self.department else None,
+            'department_code': self.department.code if self.department else None,
             'ip_start': self.ip_start,
             'ip_end': self.ip_end,
             'capacity': self.default_capacity,
@@ -189,6 +196,7 @@ class Workstation(db.Model):
     seat_number = db.Column(db.Integer, nullable=False)  # 1 to 90
     ip_address = db.Column(db.String(50), nullable=True, index=True)
     mac_address = db.Column(db.String(50), nullable=True)
+    device_id = db.Column(db.String(100), nullable=True, unique=True, index=True)
     secret_token = db.Column(db.String(64), nullable=True)  # Provisioned workstation credential
     status = db.Column(db.String(20), default='active')  # 'active', 'maintenance', 'inactive'
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -210,6 +218,8 @@ class Workstation(db.Model):
             'workstation_code': self.workstation_code,
             'seat_number': self.seat_number,
             'ip_address': self.ip_address,
+            'mac_address': self.mac_address,
+            'device_id': self.device_id,
             'status': self.status
         }
 
@@ -241,6 +251,14 @@ class AttendanceSession(db.Model):
         return datetime.utcnow() > self.end_time
 
     @property
+    def status(self):
+        if self.is_paused:
+            return 'paused'
+        if self.is_active and not self.is_expired:
+            return 'active'
+        return 'completed'
+
+    @property
     def remaining_seconds(self):
         if not self.is_active or self.is_expired:
             return 0
@@ -250,11 +268,15 @@ class AttendanceSession(db.Model):
         return {
             'id': self.id,
             'session_code': self.session_code,
+            'status': self.status,
+            'subject_id': self.subject_id,
             'subject_name': self.subject.name if self.subject else 'N/A',
             'subject_code': self.subject.code if self.subject else 'N/A',
             'teacher_name': self.teacher.full_name if self.teacher else 'N/A',
+            'lab_id': self.lab_id,
             'lab_name': self.laboratory.name if self.laboratory else 'N/A',
             'lab_capacity': self.lab_capacity,
+            'capacity': self.lab_capacity,
             'start_pc': self.start_pc,
             'is_active': self.is_active,
             'is_paused': self.is_paused,

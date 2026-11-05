@@ -106,6 +106,11 @@ export const adminService = {
     const res = await api.delete(`/api/admin/laboratories/${id}`);
     return res.data;
   },
+
+  getLaboratoryWorkstations: async (id) => {
+    const res = await api.get(`/api/admin/laboratories/${id}/workstations`);
+    return res.data;
+  },
 };
 
 export default adminService;

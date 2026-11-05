@@ -68,3 +68,61 @@ def test_login_and_logout_routes(client, test_student):
     assert res.status_code == 200
     assert b"signed out safely" in res.data or b"Sign In" in res.data
 
+
+def test_jwt_lifecycle_and_session_refresh(client, test_student):
+    # 1. API Login returns 2-day access token and 7-day refresh token
+    login_res = client.post('/api/auth/login', json={
+        'username': test_student.username,
+        'password': 'StudentTestPassword!123'
+    })
+    assert login_res.status_code == 200
+    login_data = login_res.get_json()
+    assert login_data['success'] is True
+    access_token = login_data['access_token']
+    refresh_token = login_data['refresh_token']
+    assert access_token is not None
+    assert refresh_token is not None
+
+    # Verify expiration windows (2 days = ~172800s, 7 days = ~604800s)
+    from app.utils.jwt_util import decode_jwt_token
+    access_payload = decode_jwt_token(access_token, expected_type='access')
+    refresh_payload = decode_jwt_token(refresh_token, expected_type='refresh')
+    assert access_payload is not None
+    assert refresh_payload is not None
+    assert access_payload['user_id'] == test_student.id
+    assert refresh_payload['user_id'] == test_student.id
+
+    access_duration = access_payload['exp'] - access_payload['iat']
+    refresh_duration = refresh_payload['exp'] - refresh_payload['iat']
+    assert access_duration == 2 * 24 * 3600
+    assert refresh_duration == 7 * 24 * 3600
+
+    # 2. Access protected endpoint using Bearer Token (logout session first)
+    client.get('/api/auth/logout')
+    headers = {'Authorization': f'Bearer {access_token}'}
+    me_res = client.get('/api/auth/me', headers=headers)
+    assert me_res.status_code == 200
+    me_data = me_res.get_json()
+    assert me_data['authenticated'] is True
+    assert me_data['user']['username'] == test_student.username
+
+    # 3. Refresh Access Token using 7-day refresh token
+    refresh_res = client.post('/api/auth/refresh', json={'refresh_token': refresh_token})
+    assert refresh_res.status_code == 200
+    ref_data = refresh_res.get_json()
+    assert ref_data['success'] is True
+    new_access_token = ref_data['access_token']
+    assert new_access_token is not None
+
+    # 4. Use new access token
+    headers_new = {'Authorization': f'Bearer {new_access_token}'}
+    me_res_new = client.get('/api/auth/me', headers=headers_new)
+    assert me_res_new.status_code == 200
+    assert me_res_new.get_json()['authenticated'] is True
+
+    # 5. Invalid / expired token rejection
+    client.get('/api/auth/logout')
+    bad_headers = {'Authorization': 'Bearer invalid.token.payload'}
+    me_bad = client.get('/api/auth/me', headers=bad_headers)
+    assert me_bad.get_json()['authenticated'] is False
+

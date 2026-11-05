@@ -20,14 +20,21 @@ def submit():
         return jsonify({'success': False, 'message': 'Only registered students can mark attendance.'}), 403
 
     client_ip = get_real_client_ip()
-    session_id = request.form.get('session_id', type=int)
-    workstation_token = request.headers.get('X-Workstation-Token') or request.form.get('workstation_token')
+    json_data = request.get_json(silent=True) or {}
+    session_id = json_data.get('session_id') or request.form.get('session_id', type=int)
+    workstation_number = json_data.get('workstation_number') or json_data.get('seat_number') or request.form.get('workstation_number', type=int)
+    device_id = request.headers.get('X-Device-ID') or json_data.get('device_id') or request.form.get('device_id')
+    mac_address = request.headers.get('X-MAC-Address') or json_data.get('mac_address') or request.form.get('mac_address')
+    workstation_token = request.headers.get('X-Workstation-Token') or json_data.get('workstation_token') or request.form.get('workstation_token')
 
     result = AttendanceService.mark_attendance(
         student=current_user,
         client_ip=client_ip,
-        session_id=session_id,
-        workstation_token=workstation_token
+        session_id=int(session_id) if session_id else None,
+        workstation_token=workstation_token,
+        seat_number=int(workstation_number) if workstation_number else None,
+        device_id=device_id,
+        mac_address=mac_address
     )
 
     return jsonify({

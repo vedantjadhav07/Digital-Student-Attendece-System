@@ -11,6 +11,11 @@ export const teacherService = {
     return res.data;
   },
 
+  getLaboratories: async () => {
+    const res = await api.get('/api/teacher/laboratories');
+    return res.data;
+  },
+
   addSubject: async (data) => {
     const payload = typeof data === 'object' ? data : { subject_id: data };
     const res = await api.post('/api/teacher/add_subject', payload);

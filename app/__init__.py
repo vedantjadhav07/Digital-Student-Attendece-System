@@ -26,10 +26,19 @@ def create_app(config_name=None):
     limiter.init_app(app)
     migrate.init_app(app, db)
 
-    # Setup User Loader
+    # Setup User Loaders (Session & JWT Bearer token)
     @login_manager.user_loader
     def load_user(user_id):
         return db.session.get(User, int(user_id))
+
+    @login_manager.request_loader
+    def load_user_from_request(req):
+        auth_header = req.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ', 1)[1].strip()
+            from app.utils.jwt_util import get_user_from_jwt
+            return get_user_from_jwt(token, expected_type='access')
+        return None
 
     # Register Blueprints
     from app.blueprints.auth import auth_bp

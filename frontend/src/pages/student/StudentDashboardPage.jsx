@@ -37,7 +37,11 @@ export default function StudentDashboardPage() {
       setIsLoading(true);
       const res = await studentService.getDashboard();
       setData(res);
-      if (res.active_session?.my_workstation) {
+      if (res.assigned_seat) {
+        setWorkstationNum(res.assigned_seat.toString());
+      } else if (res.detected_pc?.seat_number) {
+        setWorkstationNum(res.detected_pc.seat_number.toString());
+      } else if (res.active_session?.my_workstation) {
         setWorkstationNum(res.active_session.my_workstation.toString());
       }
     } catch (err) {
@@ -59,11 +63,14 @@ export default function StudentDashboardPage() {
       const res = await studentService.markAttendance({
         session_id: data.active_session.id,
         workstation_number: parseInt(workstationNum, 10),
+        device_id: data.detected_pc?.device_id,
+        mac_address: data.detected_pc?.mac_address,
       });
       toast.success(res.message || 'Attendance verified successfully!');
       loadDashboard();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to submit attendance.');
+      const msg = err.response?.data?.message || err.response?.data?.error || 'Failed to submit attendance.';
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -177,35 +184,55 @@ export default function StudentDashboardPage() {
                   {active_session.subject_name}
                 </h3>
                 <p className="text-xs text-light-muted dark:text-dark-muted">
-                  Lab: {active_session.lab_name} &bull; Faculty: {active_session.teacher_name || 'Assigned Instructor'}
+                  Laboratory: <strong>{active_session.lab_name}</strong> &bull; Faculty: {active_session.teacher_name || 'Assigned Instructor'}
                 </p>
+
+                {/* Device & Workstation Telemetry Pills */}
+                <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[11px] font-mono text-light-muted dark:text-dark-muted">
+                  <span className="px-2 py-0.5 rounded bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border">
+                    IP: <strong>{data?.client_ip || '127.0.0.1'}</strong>
+                  </span>
+                  {data?.detected_pc && (
+                    <>
+                      <span className="px-2 py-0.5 rounded bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border">
+                        PC Code: <strong>{data.detected_pc.workstation_code}</strong>
+                      </span>
+                      {data.detected_pc.mac_address && (
+                        <span className="px-2 py-0.5 rounded bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border">
+                          MAC: <strong>{data.detected_pc.mac_address}</strong>
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             </div>
 
             {/* Check-in Action / Status */}
             <div>
-              {active_session.already_marked ? (
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
-                  <CheckCircle2 className="w-5 h-5" />
+              {data?.already_marked ? (
+                <div className="flex items-center gap-3 p-3.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300">
+                  <CheckCircle2 className="w-6 h-6 shrink-0" />
                   <div className="text-xs">
-                    <span className="font-bold block">Attendance Verified</span>
-                    <span>Logged at WS-{active_session.my_workstation || '01'}</span>
+                    <span className="font-bold block text-sm">Attendance Verified & Locked</span>
+                    <span>Recorded at Workstation #{data.assigned_seat || workstationNum}</span>
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-3">
-                  <div className="w-32">
+                <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3">
+                  <div className="w-36">
                     <Input
-                      label="Workstation No."
+                      label="Workstation / Seat No."
                       type="number"
                       min="1"
-                      max="90"
+                      max={active_session.lab_capacity || 90}
                       value={workstationNum}
                       onChange={(e) => setWorkstationNum(e.target.value)}
                       className="py-1.5 text-xs text-center font-bold"
+                      helperText="Enter your PC number"
                     />
                   </div>
-                  <div className="pt-5">
+                  <div className="pt-2 sm:pt-0">
                     <Button
                       variant="primary"
                       size="md"
@@ -213,12 +240,21 @@ export default function StudentDashboardPage() {
                       onClick={handleMarkAttendance}
                       icon={CheckCircle2}
                     >
-                      Check In Now
+                      Verify & Mark Attendance
                     </Button>
                   </div>
                 </div>
               )}
             </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-brand-teal/20 text-[11px] text-light-muted dark:text-dark-muted flex items-center justify-between">
+            <span>
+              🔒 Security Policy: Only 1 student can mark attendance from 1 PC. Once marked, this PC is locked for this session.
+            </span>
+            <span className="font-medium text-brand-teal dark:text-brand-darkAction">
+              Hardware Bound
+            </span>
           </div>
         </Card>
       ) : (

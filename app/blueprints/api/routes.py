@@ -18,6 +18,7 @@ from app.services.report_service import ReportService
 from app.services.workstation_service import WorkstationService
 from app.services.audit_service import AuditService
 from app.utils.network import get_real_client_ip
+from app.utils.jwt_util import create_access_token, create_refresh_token, get_user_from_jwt
 
 
 # ---------------- SYSTEM HEALTH & CONTACT ----------------
@@ -77,8 +78,49 @@ def api_login():
         return jsonify({'success': False, 'message': err or 'Invalid username or password.'}), 401
 
     login_user(user, remember=remember)
+
+    # JWT Authentication: Access token (2 days), Refresh token (7 days)
+    access_token = create_access_token(user, expires_days=2)
+    refresh_token = create_refresh_token(user, expires_days=7)
+
     return jsonify({
         'success': True,
+        'user': user.to_dict(),
+        'access_token': access_token,
+        'refresh_token': refresh_token,
+        'token_type': 'Bearer',
+        'expires_in': 2 * 24 * 3600
+    })
+
+
+@api_bp.route('/api/auth/refresh', methods=['POST'])
+def api_refresh():
+    data = request.get_json() or {}
+    refresh_token = data.get('refresh_token')
+    if not refresh_token:
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            refresh_token = auth_header.split(' ', 1)[1].strip()
+
+    if not refresh_token:
+        return jsonify({'success': False, 'message': 'Refresh token is required.'}), 400
+
+    user = get_user_from_jwt(refresh_token, expected_type='refresh')
+    if not user:
+        return jsonify({'success': False, 'message': 'Invalid or expired refresh token.'}), 401
+
+    # Issue new 2-day access token and 7-day refresh token
+    new_access_token = create_access_token(user, expires_days=2)
+    new_refresh_token = create_refresh_token(user, expires_days=7)
+
+    login_user(user, remember=True)
+
+    return jsonify({
+        'success': True,
+        'access_token': new_access_token,
+        'refresh_token': new_refresh_token,
+        'token_type': 'Bearer',
+        'expires_in': 2 * 24 * 3600,
         'user': user.to_dict()
     })
 
@@ -92,11 +134,25 @@ def api_logout():
 
 @api_bp.route('/api/auth/me')
 def api_me():
+    # If already authenticated by session or Bearer header
     if current_user.is_authenticated:
         return jsonify({
             'authenticated': True,
             'user': current_user.to_dict()
         })
+
+    # Fallback to check Authorization Bearer header directly
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header.split(' ', 1)[1].strip()
+        user = get_user_from_jwt(token, expected_type='access')
+        if user:
+            login_user(user, remember=True)
+            return jsonify({
+                'authenticated': True,
+                'user': user.to_dict()
+            })
+
     return jsonify({
         'authenticated': False,
         'user': None
@@ -459,28 +515,40 @@ def admin_academic_structure():
 @api_bp.route('/api/admin/laboratories', methods=['GET', 'POST'])
 @login_required
 def admin_laboratories():
-    err = require_admin()
-    if err: return err
-
     if request.method == 'GET':
+        if current_user.role not in ('admin', 'teacher'):
+            return jsonify({'success': False, 'message': 'Forbidden'}), 403
         labs = Laboratory.query.order_by(Laboratory.name.asc()).all()
         return jsonify([l.to_dict() for l in labs])
+
+    err = require_admin()
+    if err: return err
 
     data = request.get_json() or {}
     name = (data.get('name') or '').strip()
     code = (data.get('code') or '').strip().upper() or f"LAB{name[-1] if name and name[-1].isdigit() else '1'}"
     location = (data.get('location') or '').strip() or None
-    ip_start = (data.get('ip_start') or '').strip() or None
+    room_number = (data.get('room_number') or '').strip() or None
+    department_id = data.get('department_id') or None
+    ip_start = (data.get('ip_start') or '').strip() or '127.0.0.1'
     ip_end = (data.get('ip_end') or '').strip() or None
     capacity = int(data.get('capacity', 30))
 
     if not name:
         return jsonify({'success': False, 'message': 'Laboratory name is required.'}), 400
 
+    if Laboratory.query.filter(func.lower(Laboratory.name) == name.lower()).first():
+        return jsonify({'success': False, 'message': f"Laboratory with name '{name}' already exists."}), 400
+
+    if Laboratory.query.filter(func.lower(Laboratory.code) == code.lower()).first():
+        return jsonify({'success': False, 'message': f"Laboratory with code '{code}' already exists."}), 400
+
     lab = Laboratory(
         name=name,
         code=code,
         location=location,
+        room_number=room_number,
+        department_id=department_id,
         ip_start=ip_start,
         ip_end=ip_end,
         default_capacity=capacity
@@ -492,7 +560,7 @@ def admin_laboratories():
     return jsonify({'success': True, 'laboratory': lab.to_dict()})
 
 
-@api_bp.route('/api/admin/laboratories/<int:lab_id>', methods=['PUT', 'DELETE'])
+@api_bp.route('/api/admin/laboratories/<int:lab_id>', methods=['GET', 'PUT', 'DELETE'])
 @login_required
 def admin_laboratory_detail(lab_id):
     err = require_admin()
@@ -500,18 +568,28 @@ def admin_laboratory_detail(lab_id):
 
     lab = Laboratory.query.get_or_404(lab_id)
 
+    if request.method == 'GET':
+        return jsonify(lab.to_dict())
+
     if request.method == 'PUT':
         data = request.get_json() or {}
         lab.name = (data.get('name') or lab.name).strip()
         lab.code = (data.get('code') or lab.code).strip().upper()
         lab.location = (data.get('location') or '').strip() or None
-        lab.ip_start = (data.get('ip_start') or '').strip() or None
-        lab.ip_end = (data.get('ip_end') or '').strip() or None
+        lab.room_number = (data.get('room_number') or '').strip() or None
+        if 'department_id' in data:
+            lab.department_id = data.get('department_id') or None
+        if 'ip_start' in data:
+            lab.ip_start = (data.get('ip_start') or '').strip() or None
+        if 'ip_end' in data:
+            lab.ip_end = (data.get('ip_end') or '').strip() or None
 
         if 'capacity' in data:
             cap = int(data['capacity'])
             lab.default_capacity = cap
             WorkstationService.provision_lab_workstations(lab, capacity=cap, admin_user_id=current_user.id)
+        else:
+            WorkstationService.provision_lab_workstations(lab, capacity=lab.default_capacity, admin_user_id=current_user.id)
 
         db.session.commit()
         return jsonify({'success': True, 'laboratory': lab.to_dict()})
@@ -524,6 +602,20 @@ def admin_laboratory_detail(lab_id):
         db.session.delete(lab)
         db.session.commit()
         return jsonify({'success': True, 'message': f"Laboratory '{lab.name}' deleted."})
+
+
+@api_bp.route('/api/admin/laboratories/<int:lab_id>/workstations', methods=['GET'])
+@login_required
+def admin_laboratory_workstations(lab_id):
+    err = require_admin()
+    if err: return err
+
+    lab = Laboratory.query.get_or_404(lab_id)
+    workstations = Workstation.query.filter_by(lab_id=lab.id).order_by(Workstation.seat_number.asc()).all()
+    return jsonify({
+        'laboratory': lab.to_dict(),
+        'workstations': [w.to_dict() for w in workstations]
+    })
 
 
 # ---------------- TEACHER REST APIS ----------------
@@ -571,13 +663,30 @@ def teacher_overview():
             'attended_count': count
         })
 
+    labs = Laboratory.query.filter_by(is_active=True).order_by(Laboratory.name.asc()).all()
+    if not labs:
+        labs = Laboratory.query.order_by(Laboratory.name.asc()).all()
+
     return jsonify({
         'teacher_name': current_user.full_name,
         'assigned_subjects': [s.to_dict() for s in assigned_subs],
+        'laboratories': [l.to_dict() for l in labs],
         'active_session': active_sess.to_dict() if active_sess else None,
         'total_students': total_students,
         'recent_sessions': recent_sessions_data
     })
+
+
+@api_bp.route('/api/teacher/laboratories')
+@login_required
+def teacher_laboratories():
+    err = require_teacher()
+    if err: return err
+
+    labs = Laboratory.query.filter_by(is_active=True).order_by(Laboratory.name.asc()).all()
+    if not labs:
+        labs = Laboratory.query.order_by(Laboratory.name.asc()).all()
+    return jsonify([l.to_dict() for l in labs])
 
 
 @api_bp.route('/api/teacher/subjects')
@@ -701,12 +810,15 @@ def teacher_session_live(session_id):
             'ip': r.ip_address
         }
 
+    lab_workstations = Workstation.query.filter_by(lab_id=session.lab_id).order_by(Workstation.seat_number.asc()).all()
+
     return jsonify({
         'session': session.to_dict(),
         'present_count': summary['present_count'],
         'absent_count': summary['absent_count'],
         'completion_pct': summary['completion_pct'],
         'marked_seats': marked_seats,
+        'workstations': [w.to_dict() for w in lab_workstations],
         'present_records': [r.to_dict() for r in summary['present_records']],
         'absent_students': [s.to_dict() for s in summary['absent_students']]
     })
@@ -765,6 +877,9 @@ def student_dashboard_api():
 
     already_marked = False
     assigned_seat = None
+    active_lab_pcs = []
+    detected_pc = None
+
     if active_session:
         rec = AttendanceRecord.query.filter_by(
             session_id=active_session.id,
@@ -773,13 +888,34 @@ def student_dashboard_api():
         if rec:
             already_marked = True
             assigned_seat = rec.seat_number
-        else:
-            ws = WorkstationService.find_workstation_for_request(
-                lab_id=active_session.lab_id,
-                client_ip=client_ip
-            )
-            if ws:
+
+        ws = WorkstationService.find_workstation_for_request(
+            lab_id=active_session.lab_id,
+            client_ip=client_ip
+        )
+        if ws:
+            detected_pc = ws.to_dict()
+            if not assigned_seat:
                 assigned_seat = ws.seat_number
+
+        # Build workstation list with locked states for active lab
+        marked_records = AttendanceRecord.query.filter_by(session_id=active_session.id).all()
+        marked_dict = {r.seat_number: r for r in marked_records}
+        all_ws = Workstation.query.filter_by(lab_id=active_session.lab_id).order_by(Workstation.seat_number.asc()).all()
+        for w in all_ws:
+            is_locked = w.seat_number in marked_dict
+            claimer = marked_dict[w.seat_number].student.full_name if is_locked else None
+            active_lab_pcs.append({
+                'id': w.id,
+                'seat_number': w.seat_number,
+                'workstation_code': w.workstation_code,
+                'ip_address': w.ip_address,
+                'mac_address': w.mac_address,
+                'device_id': w.device_id,
+                'is_locked': is_locked,
+                'claimed_by': claimer,
+                'is_mine': already_marked and assigned_seat == w.seat_number
+            })
 
     stats = ReportService.get_student_overall_stats(current_user.id)
 
@@ -800,6 +936,8 @@ def student_dashboard_api():
         'active_session': active_session.to_dict() if active_session else None,
         'already_marked': already_marked,
         'assigned_seat': assigned_seat,
+        'detected_pc': detected_pc,
+        'active_lab_pcs': active_lab_pcs,
         'stats': {
             'overall_percentage': stats['overall_percentage'] if stats else 0,
             'total_conducted': stats['total_conducted'] if stats else 0,

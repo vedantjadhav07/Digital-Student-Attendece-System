@@ -39,6 +39,7 @@ import Badge from '../../components/common/Badge';
 import Table from '../../components/common/Table';
 import LoadingSkeleton from '../../components/common/LoadingSkeleton';
 import teacherService from '../../services/teacherService';
+import api from '../../services/api';
 
 const CHART_COLORS = ['#397C78', '#163B42', '#10B981', '#E11D48'];
 
@@ -56,7 +57,7 @@ export default function TeacherAttendancePortalPage() {
   const [launchForm, setLaunchForm] = useState({
     subject_id: '',
     laboratory_id: '',
-    duration: '60',
+    duration: '10', // Default 10 minutes per requirement
     capacity: '30',
   });
   const [isLaunching, setIsLaunching] = useState(false);
@@ -86,29 +87,52 @@ export default function TeacherAttendancePortalPage() {
 
   // Timer countdown
   useEffect(() => {
-    if (!session || session.status !== 'active' || remainingTime <= 0) return;
+    if (!session || (session.status !== 'active' && !session.is_active) || remainingTime <= 0) return;
     const interval = setInterval(() => {
       setRemainingTime((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
     return () => clearInterval(interval);
   }, [session, remainingTime]);
 
+  // Synchronize launch form defaults when modal opens or lists update
+  useEffect(() => {
+    if (showLaunchModal) {
+      if (assignedSubjects.length > 0 && !launchForm.subject_id) {
+        setLaunchForm((prev) => ({ ...prev, subject_id: assignedSubjects[0].id.toString() }));
+      }
+      if (laboratories.length > 0 && !launchForm.laboratory_id) {
+        setLaunchForm((prev) => ({
+          ...prev,
+          laboratory_id: laboratories[0].id.toString(),
+          capacity: (laboratories[0].capacity || 30).toString(),
+        }));
+      }
+    }
+  }, [showLaunchModal, assignedSubjects, laboratories]);
+
   const loadPortalData = async () => {
     try {
       setIsLoading(true);
-      const overview = await teacherService.getOverview();
+      const [overview, labsRes] = await Promise.all([
+        teacherService.getOverview(),
+        teacherService.getLaboratories().catch(() => []),
+      ]);
       const subs = overview.assigned_subjects || [];
+      const labs = (labsRes && labsRes.length > 0) ? labsRes : (overview.laboratories || []);
       setAssignedSubjects(subs);
+      setLaboratories(labs);
+
+      setLaunchForm((prev) => ({
+        ...prev,
+        subject_id: prev.subject_id || (subs[0]?.id ? subs[0].id.toString() : ''),
+        laboratory_id: prev.laboratory_id || (labs[0]?.id ? labs[0].id.toString() : ''),
+        capacity: prev.capacity || (labs[0]?.capacity ? labs[0].capacity.toString() : '30'),
+      }));
 
       if (overview.active_session) {
         await loadSessionDetails(overview.active_session.id);
       } else {
         setSession(null);
-        // Load labs for launching
-        const subjRes = await teacherService.getSubjects().catch(() => ({}));
-        if (subs.length > 0) {
-          setLaunchForm((prev) => ({ ...prev, subject_id: subs[0].id }));
-        }
       }
     } catch (err) {
       toast.error('Failed to load attendance portal state.');
@@ -120,9 +144,26 @@ export default function TeacherAttendancePortalPage() {
   const loadSessionDetails = async (sessionId) => {
     try {
       const liveData = await teacherService.getSessionLive(sessionId);
-      setSession(liveData.session);
-      setWorkstations(liveData.workstations || []);
-      setRemainingTime(liveData.session.remaining_seconds || 0);
+      const rawSession = liveData.session || {};
+      const sessionStatus = rawSession.status || (rawSession.is_paused ? 'paused' : (rawSession.is_active ? 'active' : 'completed'));
+      setSession({
+        ...rawSession,
+        status: sessionStatus,
+      });
+      const marked = liveData.marked_seats || {};
+      const pcs = (liveData.workstations || []).map((w) => ({
+        ...w,
+        workstation_number: w.seat_number,
+        status: marked[w.seat_number] ? 'occupied' : 'vacant',
+        student_name: marked[w.seat_number]?.student_name || null,
+        roll_number: marked[w.seat_number]?.username || null,
+        checked_in_at: marked[w.seat_number]?.time || null,
+        ip_address: marked[w.seat_number]?.ip || w.ip_address,
+        mac_address: w.mac_address,
+        device_id: w.device_id,
+      }));
+      setWorkstations(pcs);
+      setRemainingTime(rawSession.remaining_seconds || 0);
 
       // Setup Socket.IO real-time listener
       setupSocket(sessionId);
@@ -138,32 +179,38 @@ export default function TeacherAttendancePortalPage() {
 
     const socket = io('/', {
       path: '/socket.io',
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
+      upgrade: true,
+      reconnectionAttempts: 5,
     });
 
     socket.on('connect', () => {
       socket.emit('join_session', { session_id: sessionId });
     });
 
-    socket.on('student_checkin', (data) => {
-      toast.success(`${data.student_name || 'Student'} checked in at WS-${data.workstation_number || data.workstation_id}!`);
-      // Update workstation in local state
+    const handleCheckinEvent = (data) => {
+      toast.success(`${data.student_name || data.student_username || 'Student'} checked in at WS-${data.seat_number || data.workstation_number}!`);
       setWorkstations((prev) =>
         prev.map((ws) =>
-          ws.workstation_number === data.workstation_number || ws.id === data.workstation_id
+          ws.seat_number === (data.seat_number || data.workstation_number)
             ? {
                 ...ws,
                 status: 'occupied',
                 student_name: data.student_name,
-                roll_number: data.roll_number,
-                checked_in_at: data.checked_in_at || new Date().toISOString(),
-                ip_address: data.ip_address,
+                roll_number: data.student_username || data.roll_number,
+                checked_in_at: data.timestamp || new Date().toISOString(),
+                ip_address: data.ip_address || ws.ip_address,
+                mac_address: data.mac_address || ws.mac_address,
+                device_id: data.device_id || ws.device_id,
               }
             : ws
         )
       );
-      setSession((prev) => (prev ? { ...prev, present_count: (prev.present_count || 0) + 1 } : prev));
-    });
+      setSession((prev) => (prev ? { ...prev, present_count: data.total_present || (prev.present_count || 0) + 1 } : prev));
+    };
+
+    socket.on('attendance_marked', handleCheckinEvent);
+    socket.on('student_checkin', handleCheckinEvent);
 
     socket.on('session_paused', () => {
       toast.info('Session paused.');
@@ -186,18 +233,27 @@ export default function TeacherAttendancePortalPage() {
   const handleLaunchSession = async (e) => {
     e.preventDefault();
     if (!launchForm.subject_id) {
-      toast.error('Please select a subject to launch.');
+      toast.error('Please select an assigned subject.');
+      return;
+    }
+    if (!launchForm.laboratory_id) {
+      toast.error('Please select the computer laboratory.');
       return;
     }
 
     try {
       setIsLaunching(true);
-      const res = await teacherService.startSession(launchForm);
+      const res = await teacherService.startSession({
+        subject_id: launchForm.subject_id,
+        lab_id: launchForm.laboratory_id,
+        duration: parseInt(launchForm.duration, 10) || 10,
+        capacity: parseInt(launchForm.capacity, 10) || 30,
+      });
       toast.success('Attendance session launched successfully!');
       setShowLaunchModal(false);
-      await loadSessionDetails(res.session_id);
+      await loadSessionDetails(res.session?.id || res.session_id);
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to start session.');
+      toast.error(err.response?.data?.message || err.response?.data?.error || 'Failed to start session.');
     } finally {
       setIsLaunching(false);
     }
@@ -214,12 +270,12 @@ export default function TeacherAttendancePortalPage() {
     }
   };
 
-  const handleExtendDuration = async () => {
+  const handleExtendDuration = async (extraMinutes = 10) => {
     if (!session) return;
     try {
-      const res = await teacherService.extendSession(session.id, 10);
-      setRemainingTime((prev) => prev + 600);
-      toast.success('Session extended by 10 minutes!');
+      const res = await teacherService.extendSession(session.id, extraMinutes);
+      setRemainingTime((prev) => prev + (extraMinutes * 60));
+      toast.success(`Session extended by ${extraMinutes} minutes!`);
     } catch (err) {
       toast.error('Failed to extend session.');
     }
@@ -365,11 +421,11 @@ export default function TeacherAttendancePortalPage() {
                 <div>
                   <div className="flex items-center gap-2.5">
                     <Badge
-                      variant={session.status === 'active' ? 'success' : session.status === 'paused' ? 'warning' : 'neutral'}
+                      variant={(session?.status === 'active' || session?.is_active) ? 'success' : (session?.status === 'paused' || session?.is_paused) ? 'warning' : 'neutral'}
                       size="sm"
                       dot
                     >
-                      {session.status.toUpperCase()}
+                      {(session?.status || (session?.is_paused ? 'paused' : (session?.is_active ? 'active' : 'completed'))).toUpperCase()}
                     </Badge>
                     <span className="text-xs text-light-muted dark:text-dark-muted font-mono">
                       Session #{session.id}
@@ -426,7 +482,15 @@ export default function TeacherAttendancePortalPage() {
                     size="sm"
                     variant="secondary"
                     icon={PlusCircle}
-                    onClick={handleExtendDuration}
+                    onClick={() => handleExtendDuration(5)}
+                  >
+                    +5 Min
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={PlusCircle}
+                    onClick={() => handleExtendDuration(10)}
                   >
                     +10 Min
                   </Button>
@@ -443,8 +507,8 @@ export default function TeacherAttendancePortalPage() {
 
               {/* Dynamic Interactive Workstation Grid (30/60/90 nodes) */}
               <Card
-                title={`Workstation Telemetry Grid (${workstations.length || 30} Nodes)`}
-                subtitle="Live status indicators. Green nodes represent authenticated student check-ins."
+                title={`Workstation Telemetry Grid – ${session.lab_name} (${workstations.length || 30} PCs)`}
+                subtitle="Live status indicators. Only PCs registered to this laboratory are active. Locked PCs are occupied by authenticated students."
               >
                 <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-10 gap-3 py-2">
                   {workstations.map((ws, idx) => {
@@ -462,7 +526,7 @@ export default function TeacherAttendancePortalPage() {
                       >
                         <div className="flex items-center justify-between w-full">
                           <span className={`font-mono text-xs font-bold ${isOccupied ? 'text-brand-deep dark:text-brand-darkAction' : 'text-light-text dark:text-dark-text'}`}>
-                            WS-{(ws.workstation_number || idx + 1).toString().padStart(2, '0')}
+                            {ws.workstation_code || `WS-${(ws.workstation_number || idx + 1).toString().padStart(2, '0')}`}
                           </span>
                           <span
                             className={`w-2 h-2 rounded-full ${
@@ -655,7 +719,7 @@ export default function TeacherAttendancePortalPage() {
         isOpen={showLaunchModal}
         onClose={() => setShowLaunchModal(false)}
         title="Launch Laboratory Session"
-        subtitle="Initialize a real-time digital attendance portal."
+        subtitle="Select the subject and laboratory room to activate registered PCs."
       >
         <form onSubmit={handleLaunchSession} className="space-y-4">
           <Select
@@ -663,10 +727,36 @@ export default function TeacherAttendancePortalPage() {
             required
             value={launchForm.subject_id}
             onChange={(e) => setLaunchForm({ ...launchForm, subject_id: e.target.value })}
-            options={assignedSubjects.map((s) => ({
-              label: `${s.name} (${s.code})`,
-              value: s.id,
-            }))}
+            options={
+              assignedSubjects.length > 0
+                ? assignedSubjects.map((s) => ({
+                    label: `${s.name} (${s.code})`,
+                    value: s.id.toString(),
+                  }))
+                : [{ label: 'No subjects assigned', value: '' }]
+            }
+          />
+
+          <Select
+            label="Computer Laboratory (Practical Room)"
+            required
+            value={launchForm.laboratory_id}
+            onChange={(e) => {
+              const selectedLab = laboratories.find((l) => l.id.toString() === e.target.value);
+              setLaunchForm({
+                ...launchForm,
+                laboratory_id: e.target.value,
+                capacity: (selectedLab?.capacity || 30).toString(),
+              });
+            }}
+            options={
+              laboratories.length > 0
+                ? laboratories.map((l) => ({
+                    label: `${l.name} (${l.code}) – ${l.capacity || 30} PCs [${l.room_number || l.location || 'Campus'}]`,
+                    value: l.id.toString(),
+                  }))
+                : [{ label: 'No laboratories found (add lab in Admin panel)', value: '' }]
+            }
           />
 
           <div className="grid grid-cols-2 gap-3">
@@ -675,9 +765,9 @@ export default function TeacherAttendancePortalPage() {
               value={launchForm.capacity}
               onChange={(e) => setLaunchForm({ ...launchForm, capacity: e.target.value })}
               options={[
-                { label: '30 Workstations', value: '30' },
-                { label: '60 Workstations', value: '60' },
-                { label: '90 Workstations', value: '90' },
+                { label: '30 Workstations (PCs)', value: '30' },
+                { label: '60 Workstations (PCs)', value: '60' },
+                { label: '90 Workstations (PCs)', value: '90' },
               ]}
             />
             <Select
@@ -685,13 +775,21 @@ export default function TeacherAttendancePortalPage() {
               value={launchForm.duration}
               onChange={(e) => setLaunchForm({ ...launchForm, duration: e.target.value })}
               options={[
+                { label: '10 Minutes (Default)', value: '10' },
+                { label: '15 Minutes', value: '15' },
+                { label: '20 Minutes', value: '20' },
                 { label: '30 Minutes', value: '30' },
                 { label: '45 Minutes', value: '45' },
                 { label: '60 Minutes', value: '60' },
-                { label: '90 Minutes', value: '90' },
-                { label: '120 Minutes', value: '120' },
               ]}
             />
+          </div>
+
+          <div className="p-3 rounded-lg bg-brand-soft/10 border border-brand-teal/20 text-xs text-light-muted dark:text-dark-muted">
+            <p className="font-semibold text-brand-deep dark:text-brand-darkAction">Security Policy Enforcement:</p>
+            <p className="mt-0.5">
+              Only PCs registered to this laboratory room will be activated. Each PC is locked once a student records attendance, preventing proxy or multiple submissions.
+            </p>
           </div>
 
           <div className="flex justify-end gap-3 pt-3">
@@ -699,7 +797,7 @@ export default function TeacherAttendancePortalPage() {
               Cancel
             </Button>
             <Button type="submit" variant="primary" isLoading={isLaunching}>
-              Start Attendance Session
+              Activate Lab & Start Session
             </Button>
           </div>
         </form>
@@ -729,34 +827,50 @@ export default function TeacherAttendancePortalPage() {
       <Modal
         isOpen={!!selectedSeat}
         onClose={() => setSelectedSeat(null)}
-        title={`Workstation WS-${selectedSeat?.workstation_number || selectedSeat?.id}`}
-        subtitle="Live telemetry and check-in inspection"
+        title={`Workstation ${selectedSeat?.workstation_code || `WS-${selectedSeat?.workstation_number}`}`}
+        subtitle="Hardware telemetry and attendance lock state"
       >
         {selectedSeat && (
           <div className="space-y-3 text-xs">
             <div className="flex justify-between py-1.5 border-b border-light-border dark:border-dark-border">
-              <span className="text-light-muted dark:text-dark-muted">Status</span>
-              <Badge variant={selectedSeat.status === 'occupied' ? 'success' : 'neutral'} size="sm" dot>
-                {selectedSeat.status === 'occupied' ? 'Occupied' : 'Vacant'}
+              <span className="text-light-muted dark:text-dark-muted">Lock State</span>
+              <Badge variant={selectedSeat.status === 'occupied' ? 'danger' : 'success'} size="sm" dot>
+                {selectedSeat.status === 'occupied' ? 'Locked (Claimed)' : 'Available (Unlocked)'}
               </Badge>
             </div>
+            <div className="flex justify-between py-1.5 border-b border-light-border dark:border-dark-border">
+              <span className="text-light-muted dark:text-dark-muted">Workstation Code</span>
+              <span className="font-mono font-bold">{selectedSeat.workstation_code || `WS-${selectedSeat.seat_number}`}</span>
+            </div>
+            <div className="flex justify-between py-1.5 border-b border-light-border dark:border-dark-border">
+              <span className="text-light-muted dark:text-dark-muted">Registered Sequential IP</span>
+              <span className="font-mono text-brand-teal dark:text-brand-darkAction font-semibold">{selectedSeat.ip_address || '127.0.0.1'}</span>
+            </div>
+            {selectedSeat.mac_address && (
+              <div className="flex justify-between py-1.5 border-b border-light-border dark:border-dark-border">
+                <span className="text-light-muted dark:text-dark-muted">Registered MAC Address</span>
+                <span className="font-mono">{selectedSeat.mac_address}</span>
+              </div>
+            )}
+            {selectedSeat.device_id && (
+              <div className="flex justify-between py-1.5 border-b border-light-border dark:border-dark-border">
+                <span className="text-light-muted dark:text-dark-muted">Unique Device ID</span>
+                <span className="font-mono text-[11px] truncate max-w-[200px]" title={selectedSeat.device_id}>{selectedSeat.device_id}</span>
+              </div>
+            )}
             {selectedSeat.status === 'occupied' && (
               <>
                 <div className="flex justify-between py-1.5 border-b border-light-border dark:border-dark-border">
-                  <span className="text-light-muted dark:text-dark-muted">Student Name</span>
+                  <span className="text-light-muted dark:text-dark-muted">Attended Student</span>
                   <span className="font-semibold">{selectedSeat.student_name}</span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-light-border dark:border-dark-border">
                   <span className="text-light-muted dark:text-dark-muted">Roll Number</span>
                   <span className="font-mono">{selectedSeat.roll_number}</span>
                 </div>
-                <div className="flex justify-between py-1.5 border-b border-light-border dark:border-dark-border">
+                <div className="flex justify-between py-1.5">
                   <span className="text-light-muted dark:text-dark-muted">Check-In Timestamp</span>
                   <span>{new Date(selectedSeat.checked_in_at).toLocaleTimeString()}</span>
-                </div>
-                <div className="flex justify-between py-1.5">
-                  <span className="text-light-muted dark:text-dark-muted">Client IP</span>
-                  <span className="font-mono">{selectedSeat.ip_address || '127.0.0.1'}</span>
                 </div>
               </>
             )}

@@ -4,19 +4,48 @@ import { authService } from '../services/authService';
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(() => authService.getStoredUser());
+  const [loading, setLoading] = useState(() => !authService.getStoredUser());
 
   const fetchCurrentUser = async () => {
     try {
       const data = await authService.getMe();
       if (data?.authenticated && data?.user) {
         setUser(data.user);
+        localStorage.setItem('lab_user', JSON.stringify(data.user));
+      } else {
+        // Attempt token refresh if refresh token is available
+        const refreshToken = localStorage.getItem('lab_refresh_token');
+        if (refreshToken) {
+          try {
+            const refreshRes = await authService.refreshToken();
+            if (refreshRes?.user) {
+              setUser(refreshRes.user);
+              return;
+            }
+          } catch {
+            setUser(null);
+          }
+        } else {
+          setUser(null);
+        }
+      }
+    } catch {
+      // If error occurs, check if refresh token works
+      const refreshToken = localStorage.getItem('lab_refresh_token');
+      if (refreshToken) {
+        try {
+          const refreshRes = await authService.refreshToken();
+          if (refreshRes?.user) {
+            setUser(refreshRes.user);
+            return;
+          }
+        } catch {
+          setUser(null);
+        }
       } else {
         setUser(null);
       }
-    } catch {
-      setUser(null);
     } finally {
       setLoading(false);
     }
@@ -49,6 +78,7 @@ export const AuthProvider = ({ children }) => {
         user,
         setUser,
         loading,
+        isLoading: loading,
         isAuthenticated: !!user,
         login,
         logout,
