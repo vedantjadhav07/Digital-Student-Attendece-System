@@ -1,7 +1,8 @@
 import os
 import click
 from datetime import datetime
-from flask import Flask, redirect, url_for, render_template
+from flask import Flask, redirect, url_for, render_template, request
+from flask_cors import CORS
 from app.config import config_by_name
 from app.extensions import db, login_manager, socketio, csrf, limiter, migrate
 from app.models import User
@@ -25,6 +26,13 @@ def create_app(config_name=None):
     csrf.init_app(app)
     limiter.init_app(app)
     migrate.init_app(app, db)
+
+    # Configure CORS: Restrict API access to trusted frontend origins
+    allowed_origins = [o.strip() for o in os.getenv(
+        'ALLOWED_ORIGINS',
+        'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5000,http://127.0.0.1:5000'
+    ).split(',') if o.strip()]
+    CORS(app, resources={r"/api/*": {"origins": allowed_origins}, r"/attendance/*": {"origins": allowed_origins}}, supports_credentials=True)
 
     # Setup User Loaders (Session & JWT Bearer token)
     @login_manager.user_loader
@@ -85,6 +93,12 @@ def create_app(config_name=None):
         response.headers['X-Frame-Options'] = 'SAMEORIGIN'
         response.headers['X-XSS-Protection'] = '1; mode=block'
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
+
+        # Strict-Transport-Security (HSTS) when running over HTTPS or in production
+        if app.config.get('SESSION_COOKIE_SECURE') or request.is_secure:
+            response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
+
         return response
 
     # Error Handlers

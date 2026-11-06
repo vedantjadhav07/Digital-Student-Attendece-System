@@ -6,7 +6,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy import text, func
 
 from app.blueprints.api import api_bp
-from app.extensions import db
+from app.extensions import db, limiter
 from app.models import (
     User, Department, Subject, Laboratory, Workstation,
     TeacherSubject, StudentEnrollment, AttendanceSession, AttendanceRecord, AuditLog
@@ -41,8 +41,14 @@ def health():
 
 
 @api_bp.route('/api/contact', methods=['POST'])
+@limiter.limit("5 per minute")
 def contact():
     data = request.get_json() or {}
+
+    # Anti-bot honeypot check (invisible field filled only by spam bots)
+    if data.get('website') or data.get('hp_field'):
+        return jsonify({'success': True, 'message': 'Thank you! Your message has been received.'}), 200
+
     name = (data.get('name') or '').strip()
     email = (data.get('email') or '').strip()
     subject = (data.get('subject') or '').strip()
@@ -50,6 +56,9 @@ def contact():
 
     if not name or not email or not message:
         return jsonify({'success': False, 'message': 'Please provide your name, email, and message.'}), 400
+
+    if len(name) > 100 or len(email) > 120 or len(message) > 3000:
+        return jsonify({'success': False, 'message': 'Input length exceeded safety limits.'}), 400
 
     AuditService.log(
         action="CONTACT_INQUIRY",
@@ -66,12 +75,16 @@ def contact():
 # ---------------- AUTH REST APIS ----------------
 
 @api_bp.route('/api/auth/login', methods=['POST'])
+@limiter.limit("15 per minute")
 def api_login():
     data = request.get_json() or {}
     username = (data.get('username') or '').strip()
     password = data.get('password') or ''
     remember = bool(data.get('remember', False))
     client_ip = get_real_client_ip()
+
+    if not username or not password:
+        return jsonify({'success': False, 'message': 'Username and password are required.'}), 400
 
     user, err = AuthService.authenticate_user(username, password, client_ip=client_ip)
     if not user:
@@ -94,6 +107,7 @@ def api_login():
 
 
 @api_bp.route('/api/auth/refresh', methods=['POST'])
+@limiter.limit("15 per minute")
 def api_refresh():
     data = request.get_json() or {}
     refresh_token = data.get('refresh_token')
